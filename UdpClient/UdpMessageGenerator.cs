@@ -7,34 +7,6 @@ public class UdpMessageGenerator
 {
     private Encoding _encoding = Encoding.ASCII;
     
-    public byte[] GenerateConfirmMessage(UInt16 refId)
-    {
-        var message = new byte[3];
-        
-        message[0] = (byte)MessageType.CONFIRM;
-        message[1] = (byte)(refId >> 8);
-        message[2] = (byte)refId;
-        
-        return message;
-    }
-    
-    public byte[] GenerateReplyMessage(UInt16 id, bool result, UInt16 refId, string contents)
-    {
-        var contentsBytes = ConvertStringToAsciiBytes(contents);
-        
-        var message = new byte[1 + 2 + 1 + 2 + contentsBytes.Length];
-
-        message[0] = (byte)MessageType.REPLY;
-        message[1] = (byte)(id >> 8);
-        message[2] = (byte)id;
-        message[3] = (byte)(result ? 1 : 0);
-        message[4] = (byte)(refId >> 8);
-        message[5] = (byte)refId;
-        Array.Copy(contentsBytes, 0, message, 6, contentsBytes.Length);
-
-        return message;
-    }
-
     public byte[] GenerateAuthMessage(UInt16 id, string username, string displayName, string secret)
     {
         var usernameBytes = ConvertStringToAsciiBytes(username);
