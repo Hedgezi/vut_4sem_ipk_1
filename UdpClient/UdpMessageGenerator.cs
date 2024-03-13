@@ -92,7 +92,7 @@ public class UdpMessageGenerator
     {
         var buffer = new byte[_encoding.GetByteCount(convertedString)+1];
         var length = _encoding.GetBytes(convertedString, 0, convertedString.Length, buffer, 0);
-        buffer[length - 1] = 0;
+        buffer[length] = 0;
         
         return buffer;
     }
