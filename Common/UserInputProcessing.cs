@@ -1,7 +1,7 @@
 namespace vut_ipk1.Common;
 
 public class UserInputProcessing(
-    IConnection _connection
+    IConnection connection
 )
 {
     public async Task ProcessUserInputAsync()
@@ -35,8 +35,20 @@ public class UserInputProcessing(
                             continue;
                         }
         
-                        // connection.Auth(splitArguments[0], splitArguments[1], splitArguments[2]);
+                        connection.Auth(splitArguments[0], splitArguments[1], splitArguments[2]);
         
+                        break;
+                    case "/rename":
+                        if (arguments == null)
+                        {
+                            Console.WriteLine("Invalid command usage.");
+                            continue;
+                        }
+                        
+                        // if (arguments.)
+                        
+                        // connection.Rename();
+                    
                         break;
                     default:
                         Console.WriteLine("Invalid command.");
