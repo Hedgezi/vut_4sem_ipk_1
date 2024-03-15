@@ -1,3 +1,5 @@
+using vut_ipk1.Common.Interfaces;
+
 namespace vut_ipk1.Common;
 
 public class UserInputProcessing(
@@ -35,7 +37,7 @@ public class UserInputProcessing(
                             continue;
                         }
         
-                        connection.Auth(splitArguments[0], splitArguments[1], splitArguments[2]);
+                        await connection.Auth(splitArguments[0], splitArguments[1], splitArguments[2]);
         
                         break;
                     case "/rename":
