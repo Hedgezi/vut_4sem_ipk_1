@@ -1,4 +1,4 @@
-namespace vut_ipk1.Common.Enum;
+namespace vut_ipk1.Common.Enums;
 
 public static class ErrorMessage
 {
