@@ -1,13 +1,13 @@
 using System.Text;
-using vut_ipk1.Common.Enum;
+using vut_ipk1.Common.Enums;
 
-namespace vut_ipk1.UdpClient;
+namespace vut_ipk1.UdpClient.Messages;
 
 public class UdpMessageGenerator
 {
-    private Encoding _encoding = Encoding.ASCII;
-    
-    public byte[] GenerateAuthMessage(UInt16 id, string username, string displayName, string secret)
+    private static readonly Encoding TextEncoding = Encoding.ASCII;
+
+    public static byte[] GenerateAuthMessage(ushort id, string username, string displayName, string secret)
     {
         var usernameBytes = ConvertStringToAsciiBytes(username);
         var displayNameBytes = ConvertStringToAsciiBytes(displayName);
@@ -26,7 +26,7 @@ public class UdpMessageGenerator
         return message;
     }
     
-    public byte[] GenerateJoinMessage(UInt16 id, string channelId, string displayName)
+    public static byte[] GenerateJoinMessage(ushort id, string channelId, string displayName)
     {
         var channelIdBytes = ConvertStringToAsciiBytes(channelId);
         var displayNameBytes = ConvertStringToAsciiBytes(displayName);
@@ -43,7 +43,7 @@ public class UdpMessageGenerator
         return message;
     }
     
-    public byte[] GenerateMsgMessage(UInt16 id, string displayName, string contents)
+    public static byte[] GenerateMsgMessage(ushort id, string displayName, string contents)
     {
         var displayNameBytes = ConvertStringToAsciiBytes(displayName);
         var contentsBytes = ConvertStringToAsciiBytes(contents);
@@ -60,7 +60,7 @@ public class UdpMessageGenerator
         return message;
     }
     
-    public byte[] GenerateErrMessage(UInt16 id, string displayName, string contents)
+    public static byte[] GenerateErrMessage(ushort id, string displayName, string contents)
     {
         var displayNameBytes = ConvertStringToAsciiBytes(displayName);
         var contentsBytes = ConvertStringToAsciiBytes(contents);
@@ -77,7 +77,7 @@ public class UdpMessageGenerator
         return message;
     }
     
-    public byte[] GenerateByeMessage(UInt16 id)
+    public static byte[] GenerateByeMessage(ushort id)
     {
         var message = new byte[3];
         
@@ -88,10 +88,10 @@ public class UdpMessageGenerator
         return message;
     }
 
-    private byte[] ConvertStringToAsciiBytes(string convertedString)
+    private static byte[] ConvertStringToAsciiBytes(string convertedString)
     {
-        var buffer = new byte[_encoding.GetByteCount(convertedString)+1];
-        var length = _encoding.GetBytes(convertedString, 0, convertedString.Length, buffer, 0);
+        var buffer = new byte[TextEncoding.GetByteCount(convertedString)+1];
+        var length = TextEncoding.GetBytes(convertedString, 0, convertedString.Length, buffer, 0);
         buffer[length] = 0;
         
         return buffer;
