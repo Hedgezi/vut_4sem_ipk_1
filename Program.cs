@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using CommandLine;
 using vut_ipk1.Common;
+using vut_ipk1.Common.Interfaces;
 using vut_ipk1.UdpClient;
 
 namespace vut_ipk1;
