@@ -26,14 +26,14 @@ public class UserInputProcessing(
                     case "/auth":
                         if (arguments == null)
                         {
-                            Console.WriteLine("Invalid command usage.");
+                            await Console.Error.WriteLineAsync("Invalid command usage.");
                             continue;
                         }
         
                         var splitArguments = arguments.Split(' ');
                         if (splitArguments.Length != 3)
                         {
-                            Console.WriteLine("Invalid command usage.");
+                            await Console.Error.WriteLineAsync("Invalid command usage.");
                             continue;
                         }
         
@@ -43,17 +43,23 @@ public class UserInputProcessing(
                     case "/rename":
                         if (arguments == null)
                         {
-                            Console.WriteLine("Invalid command usage.");
+                            await Console.Error.WriteLineAsync("Invalid command usage.");
                             continue;
                         }
                         
-                        // if (arguments.)
+                        var possibleDisplayName = arguments[1].ToString();
                         
-                        // connection.Rename();
+                        if (possibleDisplayName.ToCharArray().Any(character => character < 33 || character > 126))
+                        {
+                            await Console.Error.WriteLineAsync("Invalid display name.");
+                            continue;
+                        }
+                        
+                        connection.Rename(possibleDisplayName);
                     
                         break;
                     default:
-                        Console.WriteLine("Invalid command.");
+                        await Console.Error.WriteLineAsync("Invalid command.");
                         break;
                 }
             }
