@@ -6,7 +6,18 @@ namespace vut_ipk1.UdpClient.Messages;
 public class UdpMessageGenerator
 {
     private static readonly Encoding TextEncoding = Encoding.ASCII;
-
+    
+    public static byte[] GenerateConfirmMessage(ushort id)
+    {
+        var message = new byte[3];
+        
+        message[0] = (byte)MessageType.CONFIRM;
+        message[1] = (byte)(id >> 8);
+        message[2] = (byte)id;
+        
+        return message;
+    }
+    
     public static byte[] GenerateAuthMessage(ushort id, string username, string displayName, string secret)
     {
         var usernameBytes = ConvertStringToAsciiBytes(username);
