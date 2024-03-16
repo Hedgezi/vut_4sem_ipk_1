@@ -11,4 +11,6 @@ public interface IConnection
     public Task Join(string channelName);
 
     public void Rename(string newDisplayName);
+
+    public Task EndSession();
 }

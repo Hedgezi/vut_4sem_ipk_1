@@ -46,14 +46,14 @@ public class UdpConnection : IConnection
                     _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]));
 
                     break;
-                case MessageType.REPLY when _fsmState is FsmState.Start or FsmState.Auth:
+                case MessageType.REPLY when _fsmState is FsmState.Auth:
                     var (replyAuthMessageId, replyAuthResult, replyAuthRefMessageId, replyAuthMessageContents) =
                         UdpMessageParser.ParseReplyMessage(message);
 
                     await Task.Run(() => AuthReplyRetrieval(replyAuthMessageId, replyAuthResult,
                         replyAuthRefMessageId, replyAuthMessageContents, receivedMessage.RemoteEndPoint));
                     break;
-                case MessageType.REPLY when _fsmState == FsmState.Open:
+                case MessageType.REPLY when _fsmState is FsmState.Open:
                     var (replyJoinMessageId, replyJoinResult, replyJoinRefMessageId, replyJoinMessageContents) =
                         UdpMessageParser.ParseReplyMessage(message);
 
@@ -75,7 +75,7 @@ public class UdpConnection : IConnection
 
     public async Task Auth(string username, string displayName, string secret)
     {
-        if (_fsmState != FsmState.Start)
+        if (_fsmState is not (FsmState.Start or FsmState.Auth))
         {
             await Console.Out.WriteLineAsync(ErrorMessage.AuthInWrongState);
             return;
@@ -83,9 +83,11 @@ public class UdpConnection : IConnection
 
         _displayName = displayName;
         _taskCompletionSource = new TaskCompletionSource<bool>();
+        _fsmState = FsmState.Auth;
 
         var authMessage = UdpMessageGenerator.GenerateAuthMessage(_messageCounter, username, displayName, secret);
         await SendAndAwaitConfirmResponse(authMessage, _messageCounter++,
+            // _client.Client.RemoteEndPoint == null ? null : new IPEndPoint(_ip, _port));
             new IPEndPoint(_ip, _port));
         await _taskCompletionSource.Task;
     }
@@ -126,6 +128,21 @@ public class UdpConnection : IConnection
         }
 
         _displayName = newDisplayName;
+    }
+
+    public async Task EndSession()
+    {
+        _client.Dispose();
+    
+        if (_fsmState is FsmState.Start)
+        {
+            return;
+        }
+        
+        var byeMessage = UdpMessageGenerator.GenerateByeMessage(_messageCounter);
+        await SendAndAwaitConfirmResponse(byeMessage, _messageCounter++);
+        
+        _fsmState = FsmState.End;
     }
 
     private async Task AuthReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents,
