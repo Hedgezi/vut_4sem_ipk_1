@@ -25,7 +25,8 @@ public class UdpConnection
     private readonly FixedSizeQueue<ushort> _receivedMessages = new(100); // TODO: rework received message logic
     private TaskCompletionSource<bool> _taskCompletionSource = new TaskCompletionSource<bool>();
 
-    private readonly System.Net.Sockets.UdpClient _client = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Any, 0));
+    private readonly System.Net.Sockets.UdpClient _client =
+        new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Any, 0));
 
     public UdpConnection(
         IPAddress ip,
@@ -46,37 +47,42 @@ public class UdpConnection
         {
             var receivedMessage = await _client.ReceiveAsync();
             var message = receivedMessage.Buffer;
-            
-            if (message[0] == (byte)MessageType.CONFIRM)
+            var messageType = (MessageType)message[0];
+
+            switch (messageType)
             {
-                _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message[1..3]));
-            }
-            else if (message[0] == (byte)MessageType.REPLY && _fsmState == FsmState.Start)
-            { // TODO: state Auth
-                var (messageId, result, refMessageId, messageContents) = UdpMessageParser.ParseReplyMessage(message);
+                case MessageType.CONFIRM:
+                    _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message[1..3]));
 
-                await Task.Run(() => AuthReplyRetrieval(messageId, result, refMessageId, messageContents,
-                    receivedMessage.RemoteEndPoint));
-            }
-            else if (message[0] == (byte)MessageType.MSG)
-            {
-                var (messageId, displayName, messageContents) = UdpMessageParser.ParseMsgMessage(message);
+                    break;
+                case MessageType.REPLY when _fsmState == FsmState.Start:
+                    var (replyAuthMessageId, replyAuthResult, replyAuthRefMessageId, replyAuthMessageContents) =
+                        UdpMessageParser.ParseReplyMessage(message);
 
-                await SendConfirmMessage(messageId);
+                    await Task.Run(() => AuthReplyRetrieval(replyAuthMessageId, replyAuthResult,
+                        replyAuthRefMessageId, replyAuthMessageContents, receivedMessage.RemoteEndPoint));
+                    break;
+                case MessageType.REPLY when _fsmState == FsmState.Open:
+                    var (replyJoinMessageId, replyJoinResult, replyJoinRefMessageId, replyJoinMessageContents) =
+                        UdpMessageParser.ParseReplyMessage(message);
 
-                if (_receivedMessages.Contains(messageId))
-                {
-                    continue;
-                }
+                    await Task.Run(() => JoinReplyRetrieval(replyJoinMessageId, replyJoinResult,
+                        replyJoinRefMessageId, replyJoinMessageContents));
+                    break;
+                case MessageType.MSG:
+                    var (msgMessageId, msgDisplayName, msgMessageContents) = UdpMessageParser.ParseMsgMessage(message);
+                    await SendConfirmMessage(msgMessageId);
 
-                _receivedMessages.Enqueue(messageId);
-                await Console.Out.WriteLineAsync($"{displayName}: {messageContents}");
-            }
-            else if (message[0] == (byte)MessageType.BYE)
-            {
-                _client.Dispose();
+                    if (!_receivedMessages.Contains(msgMessageId))
+                    {
+                        _receivedMessages.Enqueue(msgMessageId);
+                        await Console.Out.WriteLineAsync($"{msgDisplayName}: {msgMessageContents}");
+                    }
 
-                return;
+                    break;
+                case MessageType.BYE:
+                    _client.Dispose();
+                    return;
             }
         }
     }
@@ -90,7 +96,7 @@ public class UdpConnection
         }
 
         _displayName = displayName;
-        
+
         _taskCompletionSource = new TaskCompletionSource<bool>();
 
         var authMessage = UdpMessageGenerator.GenerateAuthMessage(_messageCounter, username, displayName, secret);
@@ -98,7 +104,22 @@ public class UdpConnection
             new IPEndPoint(_ip, _port));
         await _taskCompletionSource.Task;
     }
-    
+
+    public async Task Join(string channelName)
+    {
+        if (_fsmState != FsmState.Open)
+        {
+            await Console.Out.WriteLineAsync(ErrorMessage.JoinInWrongState);
+            return;
+        }
+
+        _taskCompletionSource = new TaskCompletionSource<bool>();
+        
+        var joinMessage = UdpMessageGenerator.GenerateJoinMessage(_messageCounter, _displayName, channelName);
+        await SendAndAwaitConfirmResponse(joinMessage, _messageCounter++);
+        await _taskCompletionSource.Task;
+    }
+
     public async Task SendMessage(string message)
     {
         if (_fsmState != FsmState.Open)
@@ -150,6 +171,33 @@ public class UdpConnection
         _fsmState = FsmState.Open;
         _taskCompletionSource.SetResult(true);
     }
+    
+    private async Task JoinReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents)
+    {
+        await SendConfirmMessage(messageId);
+
+        if (!IsItNewMessage(messageId))
+        {
+            return;
+        }
+
+        if (!result)
+        {
+            await Console.Error.WriteLineAsync($"Failure: {messageContents}");
+            return;
+        }
+
+        if (refMessageId != this._messageCounter - 1)
+        {
+            // TODO: error
+        }
+
+        await Console.Out.WriteLineAsync($"Success: {messageContents}");
+
+        _receivedMessages.Enqueue(messageId);
+        
+        _taskCompletionSource.SetResult(true);
+    }
 
     private async Task SendAndAwaitConfirmResponse(byte[] message, ushort messageId, IPEndPoint? endPoint = null)
     {
@@ -165,7 +213,7 @@ public class UdpConnection
             }
 
             await Task.Delay(_confirmationTimeout);
-            
+
             if (_awaitedMessages.Remove(messageId))
             {
                 return;
