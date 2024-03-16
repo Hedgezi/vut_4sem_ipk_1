@@ -8,8 +8,7 @@ using vut_ipk1.Udp.Messages;
 
 namespace vut_ipk1.Udp;
 
-public class UdpConnection
-    : IConnection
+public class UdpConnection : IConnection
 {
     private readonly IPAddress _ip;
     private readonly int _port;
@@ -53,7 +52,7 @@ public class UdpConnection
                     _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]));
 
                     break;
-                case MessageType.REPLY when _fsmState == FsmState.Start:
+                case MessageType.REPLY when _fsmState is FsmState.Start or FsmState.Auth:
                     var (replyAuthMessageId, replyAuthResult, replyAuthRefMessageId, replyAuthMessageContents) =
                         UdpMessageParser.ParseReplyMessage(message);
 
@@ -69,14 +68,8 @@ public class UdpConnection
                     break;
                 case MessageType.MSG:
                     var (msgMessageId, msgDisplayName, msgMessageContents) = UdpMessageParser.ParseMsgMessage(message);
-                    await SendConfirmMessage(msgMessageId);
 
-                    if (!_receivedMessages.Contains(msgMessageId))
-                    {
-                        _receivedMessages.Enqueue(msgMessageId);
-                        await Console.Out.WriteLineAsync($"{msgDisplayName}: {msgMessageContents}");
-                    }
-
+                    await Task.Run(() => Msg(msgMessageId, msgDisplayName, msgMessageContents));
                     break;
                 case MessageType.BYE:
                     _client.Dispose();
@@ -190,6 +183,17 @@ public class UdpConnection
 
         _receivedMessages.Enqueue(messageId);
         _taskCompletionSource.SetResult(true);
+    }
+
+    private async Task Msg(ushort messageId, string displayName, string messageContents)
+    {
+        await SendConfirmMessage(messageId);
+
+        if (_receivedMessages.Contains(messageId))
+            return;
+
+        _receivedMessages.Enqueue(messageId);
+        await Console.Out.WriteLineAsync($"{displayName}: {messageContents}");
     }
 
     private async Task SendAndAwaitConfirmResponse(byte[] message, ushort messageId, IPEndPoint? endPoint = null)
