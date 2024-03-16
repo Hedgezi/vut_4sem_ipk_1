@@ -19,18 +19,12 @@ public class UdpConnection : IConnection
     private FsmState _fsmState = FsmState.Start;
     private string _displayName;
     private readonly List<ushort> _awaitedMessages = [];
-    private readonly FixedSizeQueue<ushort> _receivedMessages = new(100); // TODO: rework received message logic
+    private readonly FixedSizeQueue<ushort> _receivedMessages = new(100);
     private TaskCompletionSource<bool> _taskCompletionSource;
 
-    private readonly UdpClient _client =
-        new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+    private readonly UdpClient _client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
 
-    public UdpConnection(
-        IPAddress ip,
-        int port,
-        int confirmationTimeout,
-        int maxRetransmissions
-    )
+    public UdpConnection(IPAddress ip, int port, int confirmationTimeout, int maxRetransmissions)
     {
         this._ip = ip;
         this._port = port;
@@ -73,6 +67,7 @@ public class UdpConnection : IConnection
                     break;
                 case MessageType.BYE:
                     _client.Dispose();
+                    
                     return;
             }
         }
@@ -80,14 +75,13 @@ public class UdpConnection : IConnection
 
     public async Task Auth(string username, string displayName, string secret)
     {
-        if (this._fsmState != FsmState.Start)
+        if (_fsmState != FsmState.Start)
         {
             await Console.Out.WriteLineAsync(ErrorMessage.AuthInWrongState);
             return;
         }
 
         _displayName = displayName;
-
         _taskCompletionSource = new TaskCompletionSource<bool>();
 
         var authMessage = UdpMessageGenerator.GenerateAuthMessage(_messageCounter, username, displayName, secret);
@@ -148,7 +142,7 @@ public class UdpConnection : IConnection
             return;
         }
 
-        if (refMessageId != this._messageCounter - 1)
+        if (refMessageId != _messageCounter - 1)
         {
             // TODO: error
         }
@@ -174,7 +168,7 @@ public class UdpConnection : IConnection
             return;
         }
 
-        if (refMessageId != this._messageCounter - 1)
+        if (refMessageId != _messageCounter - 1)
         {
             // TODO: error
         }
