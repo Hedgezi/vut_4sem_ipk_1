@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
+using System.Buffers.Binary;
 using vut_ipk1.Common;
 using vut_ipk1.Common.Enums;
 using vut_ipk1.Common.Interfaces;
@@ -20,8 +23,9 @@ public class UdpConnection
     private string _displayName;
     private readonly List<ushort> _awaitedMessages = [];
     private readonly FixedSizeQueue<ushort> _receivedMessages = new(100); // TODO: rework received message logic
+    private TaskCompletionSource<bool> _taskCompletionSource = new TaskCompletionSource<bool>();
 
-    private readonly System.Net.Sockets.UdpClient _client = new System.Net.Sockets.UdpClient();
+    private readonly System.Net.Sockets.UdpClient _client = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Any, 0));
 
     public UdpConnection(
         IPAddress ip,
@@ -42,26 +46,24 @@ public class UdpConnection
         {
             var receivedMessage = await _client.ReceiveAsync();
             var message = receivedMessage.Buffer;
-
+            
             if (message[0] == (byte)MessageType.CONFIRM)
             {
-                _awaitedMessages.Add(BitConverter.ToUInt16(message, 1));
+                _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message[1..3]));
             }
-            else if (message[0] == (byte)MessageType.REPLY && this._fsmState == FsmState.Start)
-            {
+            else if (message[0] == (byte)MessageType.REPLY && _fsmState == FsmState.Start)
+            { // TODO: state Auth
                 var (messageId, result, refMessageId, messageContents) = UdpMessageParser.ParseReplyMessage(message);
-                
-                await Task.Run(() => AuthReplyRetrieval(messageId, result, refMessageId, messageContents, receivedMessage.RemoteEndPoint));
+
+                await Task.Run(() => AuthReplyRetrieval(messageId, result, refMessageId, messageContents,
+                    receivedMessage.RemoteEndPoint));
             }
             else if (message[0] == (byte)MessageType.MSG)
             {
                 var (messageId, displayName, messageContents) = UdpMessageParser.ParseMsgMessage(message);
 
                 await SendConfirmMessage(messageId);
-                
-                var confirmMessage = UdpMessageGenerator.GenerateConfirmMessage(messageId);
-                await _client.SendAsync(confirmMessage, confirmMessage.Length, receivedMessage.RemoteEndPoint);
-                
+
                 if (_receivedMessages.Contains(messageId))
                 {
                     continue;
@@ -69,6 +71,12 @@ public class UdpConnection
 
                 _receivedMessages.Enqueue(messageId);
                 await Console.Out.WriteLineAsync($"{displayName}: {messageContents}");
+            }
+            else if (message[0] == (byte)MessageType.BYE)
+            {
+                _client.Dispose();
+
+                return;
             }
         }
     }
@@ -81,25 +89,49 @@ public class UdpConnection
             return;
         }
 
-        this._displayName = displayName;
+        _displayName = displayName;
+        
+        _taskCompletionSource = new TaskCompletionSource<bool>();
 
         var authMessage = UdpMessageGenerator.GenerateAuthMessage(_messageCounter, username, displayName, secret);
-        await SendAndAwaitConfirmResponse(authMessage, _messageCounter++, new IPEndPoint(_ip, _port)); // TODO: check if it returned
+        await SendAndAwaitConfirmResponse(authMessage, _messageCounter++,
+            new IPEndPoint(_ip, _port));
+        await _taskCompletionSource.Task;
+    }
+    
+    public async Task SendMessage(string message)
+    {
+        if (_fsmState != FsmState.Open)
+        {
+            await Console.Out.WriteLineAsync(ErrorMessage.SendMessageInWrongState);
+            return;
+        }
+
+        var messageToSend = UdpMessageGenerator.GenerateMsgMessage(_messageCounter, _displayName, message);
+        await SendAndAwaitConfirmResponse(messageToSend, _messageCounter++);
     }
 
     public void Rename(string newDisplayName)
     {
-        if (this._fsmState != FsmState.Open)
+        if (_fsmState != FsmState.Open)
         {
             Console.WriteLine(ErrorMessage.RenameInWrongState);
             return;
         }
 
-        this._displayName = newDisplayName;
+        _displayName = newDisplayName;
     }
-    
-    private async Task AuthReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents, IPEndPoint endPoint)
+
+    private async Task AuthReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents,
+        IPEndPoint endPoint)
     {
+        await SendConfirmMessage(messageId, endPoint);
+
+        if (!IsItNewMessage(messageId))
+        {
+            return;
+        }
+
         if (!result)
         {
             await Console.Error.WriteLineAsync($"Failure: {messageContents}");
@@ -111,11 +143,12 @@ public class UdpConnection
             // TODO: error
         }
 
-        await Console.Out.WriteLineAsync($"");
-        
-        this._receivedMessages.Enqueue(messageId);
+        await Console.Out.WriteLineAsync($"Success: {messageContents}");
+
+        _receivedMessages.Enqueue(messageId);
         _client.Connect(endPoint);
-        this._fsmState = FsmState.Open;
+        _fsmState = FsmState.Open;
+        _taskCompletionSource.SetResult(true);
     }
 
     private async Task SendAndAwaitConfirmResponse(byte[] message, ushort messageId, IPEndPoint? endPoint = null)
@@ -132,14 +165,14 @@ public class UdpConnection
             }
 
             await Task.Delay(_confirmationTimeout);
-
+            
             if (_awaitedMessages.Remove(messageId))
             {
                 return;
             }
         }
     }
-    
+
     private async Task SendConfirmMessage(ushort messageId, IPEndPoint? endPoint = null)
     {
         var confirmMessage = UdpMessageGenerator.GenerateConfirmMessage(messageId);
@@ -152,7 +185,7 @@ public class UdpConnection
             await _client.SendAsync(confirmMessage, confirmMessage.Length, endPoint);
         }
     }
-    
+
     private bool IsItNewMessage(ushort messageId)
     {
         return !_receivedMessages.Contains(messageId);
