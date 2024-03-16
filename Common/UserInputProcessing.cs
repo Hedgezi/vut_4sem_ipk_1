@@ -40,6 +40,16 @@ public class UserInputProcessing(
                         await connection.Auth(splitArguments[0], splitArguments[1], splitArguments[2]);
         
                         break;
+                    case "/join":
+                        if (arguments == null)
+                        {
+                            await Console.Error.WriteLineAsync("Invalid command usage.");
+                            continue;
+                        }
+                        
+                        await connection.Join(arguments);
+                        
+                        break;
                     case "/rename":
                         if (arguments == null)
                         {
@@ -62,6 +72,16 @@ public class UserInputProcessing(
                         await Console.Error.WriteLineAsync("Invalid command.");
                         break;
                 }
+            }
+            else
+            {
+                if (input.ToCharArray().Any(character => character < 32 || character > 126))
+                {
+                    await Console.Error.WriteLineAsync("Invalid message format.");
+                    continue;
+                }
+                
+                await connection.SendMessage(input);
             }
         }
     }
