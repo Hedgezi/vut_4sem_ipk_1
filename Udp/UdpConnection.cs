@@ -147,9 +147,7 @@ public class UdpConnection
         await SendConfirmMessage(messageId, endPoint);
 
         if (!IsItNewMessage(messageId))
-        {
             return;
-        }
 
         if (!result)
         {
@@ -175,9 +173,7 @@ public class UdpConnection
         await SendConfirmMessage(messageId);
 
         if (!IsItNewMessage(messageId))
-        {
             return;
-        }
 
         if (!result)
         {
@@ -193,7 +189,6 @@ public class UdpConnection
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
 
         _receivedMessages.Enqueue(messageId);
-
         _taskCompletionSource.SetResult(true);
     }
 
@@ -201,14 +196,7 @@ public class UdpConnection
     {
         for (var i = 0; i < 1 + _maxRetransmissions; i++)
         {
-            if (endPoint == null)
-            {
-                await _client.SendAsync(message, message.Length);
-            }
-            else
-            {
-                await _client.SendAsync(message, message.Length, endPoint);
-            }
+            await _client.SendAsync(message, message.Length, endPoint);
 
             await Task.Delay(_confirmationTimeout);
 
@@ -222,14 +210,8 @@ public class UdpConnection
     private async Task SendConfirmMessage(ushort messageId, IPEndPoint? endPoint = null)
     {
         var confirmMessage = UdpMessageGenerator.GenerateConfirmMessage(messageId);
-        if (endPoint == null)
-        {
-            await _client.SendAsync(confirmMessage, confirmMessage.Length);
-        }
-        else
-        {
-            await _client.SendAsync(confirmMessage, confirmMessage.Length, endPoint);
-        }
+
+        await _client.SendAsync(confirmMessage, confirmMessage.Length, endPoint);
     }
 
     private bool IsItNewMessage(ushort messageId)
