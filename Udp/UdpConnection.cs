@@ -1,14 +1,12 @@
-using System.Diagnostics;
 using System.Net;
-using System.Net.Sockets;
 using System.Buffers.Binary;
-using vut_ipk1.Common;
+using System.Net.Sockets;
 using vut_ipk1.Common.Enums;
 using vut_ipk1.Common.Interfaces;
 using vut_ipk1.Common.Structures;
-using vut_ipk1.UdpClient.Messages;
+using vut_ipk1.Udp.Messages;
 
-namespace vut_ipk1.UdpClient;
+namespace vut_ipk1.Udp;
 
 public class UdpConnection
     : IConnection
@@ -23,10 +21,10 @@ public class UdpConnection
     private string _displayName;
     private readonly List<ushort> _awaitedMessages = [];
     private readonly FixedSizeQueue<ushort> _receivedMessages = new(100); // TODO: rework received message logic
-    private TaskCompletionSource<bool> _taskCompletionSource = new TaskCompletionSource<bool>();
+    private TaskCompletionSource<bool> _taskCompletionSource;
 
-    private readonly System.Net.Sockets.UdpClient _client =
-        new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Any, 0));
+    private readonly UdpClient _client =
+        new UdpClient(new IPEndPoint(IPAddress.Any, 0));
 
     public UdpConnection(
         IPAddress ip,
@@ -52,7 +50,7 @@ public class UdpConnection
             switch (messageType)
             {
                 case MessageType.CONFIRM:
-                    _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message[1..3]));
+                    _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]));
 
                     break;
                 case MessageType.REPLY when _fsmState == FsmState.Start:
@@ -114,7 +112,7 @@ public class UdpConnection
         }
 
         _taskCompletionSource = new TaskCompletionSource<bool>();
-        
+
         var joinMessage = UdpMessageGenerator.GenerateJoinMessage(_messageCounter, _displayName, channelName);
         await SendAndAwaitConfirmResponse(joinMessage, _messageCounter++);
         await _taskCompletionSource.Task;
@@ -171,7 +169,7 @@ public class UdpConnection
         _fsmState = FsmState.Open;
         _taskCompletionSource.SetResult(true);
     }
-    
+
     private async Task JoinReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents)
     {
         await SendConfirmMessage(messageId);
@@ -195,7 +193,7 @@ public class UdpConnection
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
 
         _receivedMessages.Enqueue(messageId);
-        
+
         _taskCompletionSource.SetResult(true);
     }
 

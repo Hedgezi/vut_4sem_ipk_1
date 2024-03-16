@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace vut_ipk1.UdpClient.Messages;
+namespace vut_ipk1.Udp.Messages;
 
 public class UdpMessageParser
 {

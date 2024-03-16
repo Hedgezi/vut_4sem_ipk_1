@@ -2,7 +2,7 @@
 using CommandLine;
 using vut_ipk1.Common;
 using vut_ipk1.Common.Interfaces;
-using vut_ipk1.UdpClient;
+using vut_ipk1.Udp;
 
 namespace vut_ipk1;
 

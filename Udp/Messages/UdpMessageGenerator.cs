@@ -1,7 +1,7 @@
 using System.Text;
 using vut_ipk1.Common.Enums;
 
-namespace vut_ipk1.UdpClient.Messages;
+namespace vut_ipk1.Udp.Messages;
 
 public class UdpMessageGenerator
 {
