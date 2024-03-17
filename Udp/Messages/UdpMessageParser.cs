@@ -3,7 +3,7 @@ using System.Text;
 
 namespace vut_ipk1.Udp.Messages;
 
-public class UdpMessageParser
+public static class UdpMessageParser
 {
     private static readonly Encoding TextEncoding = Encoding.ASCII;
 

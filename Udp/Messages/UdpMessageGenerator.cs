@@ -3,7 +3,7 @@ using vut_ipk1.Common.Enums;
 
 namespace vut_ipk1.Udp.Messages;
 
-public class UdpMessageGenerator
+public static class UdpMessageGenerator
 {
     private static readonly Encoding TextEncoding = Encoding.ASCII;
     
@@ -12,7 +12,7 @@ public class UdpMessageGenerator
         var message = new byte[3];
         
         message[0] = (byte)MessageType.CONFIRM;
-        message[1] = (byte)(id);
+        message[1] = (byte)id;
         message[2] = (byte)(id >> 8);
         
         return message;
@@ -27,7 +27,7 @@ public class UdpMessageGenerator
         var message = new byte[1 + 2 + usernameBytes.Length + displayNameBytes.Length + secretBytes.Length];
         
         message[0] = (byte)MessageType.AUTH;
-        message[1] = (byte)(id);
+        message[1] = (byte)id;
         message[2] = (byte)(id >> 8);
         
         Array.Copy(usernameBytes, 0, message, 3, usernameBytes.Length);
@@ -45,7 +45,7 @@ public class UdpMessageGenerator
         var message = new byte[1 + 2 + channelIdBytes.Length + displayNameBytes.Length];
         
         message[0] = (byte)MessageType.JOIN;
-        message[1] = (byte)(id);
+        message[1] = (byte)id;
         message[2] = (byte)(id >> 8);
         
         Array.Copy(channelIdBytes, 0, message, 3, channelIdBytes.Length);
@@ -62,7 +62,7 @@ public class UdpMessageGenerator
         var message = new byte[1 + 2 + displayNameBytes.Length + contentsBytes.Length];
         
         message[0] = (byte)MessageType.MSG;
-        message[1] = (byte)(id);
+        message[1] = (byte)id;
         message[2] = (byte)(id >> 8);
         
         Array.Copy(displayNameBytes, 0, message, 3, displayNameBytes.Length);
@@ -79,7 +79,7 @@ public class UdpMessageGenerator
         var message = new byte[1 + 2 + displayNameBytes.Length + contentsBytes.Length];
         
         message[0] = (byte)MessageType.ERR;
-        message[1] = (byte)(id);
+        message[1] = (byte)id;
         message[2] = (byte)(id >> 8);
         
         Array.Copy(displayNameBytes, 0, message, 3, displayNameBytes.Length);
@@ -93,7 +93,7 @@ public class UdpMessageGenerator
         var message = new byte[3];
         
         message[0] = (byte)MessageType.BYE;
-        message[1] = (byte)(id);
+        message[1] = (byte)id;
         message[2] = (byte)(id >> 8);
         
         return message;
