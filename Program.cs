@@ -13,6 +13,16 @@ class Program
     
     private static async Task Main(string[] args)
     {
+        Console.CancelKeyPress += async (sender, e) =>
+        {
+            e.Cancel = true;
+            
+            await _connection.EndSession();
+            
+            Console.WriteLine("Exiting...");
+            Environment.Exit(0);
+        };
+        
         var options = new CommandLineOptions();
         Parser.Default.ParseArguments<CommandLineOptions>(args)
             .WithParsed(o => options = o)
@@ -37,16 +47,6 @@ class Program
             _ => throw new System.Exception("Invalid protocol type.")
         };
         var userInputProcessing = new UserInputProcessing(_connection);
-        
-        Console.CancelKeyPress += async (sender, e) =>
-        {
-            e.Cancel = true;
-            
-            await _connection.EndSession();
-            
-            Console.WriteLine("Exiting...");
-            Environment.Exit(0);
-        };
 
         var connectionMainLoopTask = _connection.MainLoopAsync();
         var userInputProcessingTask = userInputProcessing.ProcessUserInputAsync();
