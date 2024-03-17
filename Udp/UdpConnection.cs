@@ -38,15 +38,14 @@ public class UdpConnection : IConnection
         {
             var receivedMessage = await _client.ReceiveAsync();
             var message = receivedMessage.Buffer;
-            var messageType = (MessageType)message[0];
 
-            switch (messageType)
+            switch ((MessageType)message[0])
             {
                 case MessageType.CONFIRM:
                     _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]));
 
                     break;
-                case MessageType.REPLY when _fsmState is FsmState.Auth:
+                case MessageType.REPLY when _fsmState is FsmState.Auth or FsmState.Start:
                     var (replyAuthMessageId, replyAuthResult, replyAuthRefMessageId, replyAuthMessageContents) =
                         UdpMessageParser.ParseReplyMessage(message);
 
@@ -65,9 +64,22 @@ public class UdpConnection : IConnection
 
                     await Task.Run(() => Msg(msgMessageId, msgDisplayName, msgMessageContents));
                     break;
-                case MessageType.BYE:
-                    _client.Dispose();
+                case MessageType.ERR:
+                    var (errMessageId, errDisplayName, errMessageContents) = UdpMessageParser.ParseMsgMessage(message);
                     
+                    await Err(errMessageId, errDisplayName, errMessageContents);
+                    
+                    await EndSession();
+                    return;
+                case MessageType.BYE:
+                    _client.Close();
+                    
+                    return;
+                default:
+                    var incomingMessageId = BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]);
+                    await ServerError(incomingMessageId);
+                    
+                    await EndSession();
                     return;
             }
         }
@@ -83,12 +95,10 @@ public class UdpConnection : IConnection
 
         _displayName = displayName;
         _taskCompletionSource = new TaskCompletionSource<bool>();
-        _fsmState = FsmState.Auth;
 
         var authMessage = UdpMessageGenerator.GenerateAuthMessage(_messageCounter, username, displayName, secret);
         await SendAndAwaitConfirmResponse(authMessage, _messageCounter++,
-            // _client.Client.RemoteEndPoint == null ? null : new IPEndPoint(_ip, _port));
-            new IPEndPoint(_ip, _port));
+            _fsmState == FsmState.Auth ? null : new IPEndPoint(_ip, _port));
         await _taskCompletionSource.Task;
     }
 
@@ -132,16 +142,18 @@ public class UdpConnection : IConnection
 
     public async Task EndSession()
     {
-        _client.Dispose();
-    
         if (_fsmState is FsmState.Start)
         {
+            _client.Close();
+            _client.Dispose();
             return;
         }
         
         var byeMessage = UdpMessageGenerator.GenerateByeMessage(_messageCounter);
         await SendAndAwaitConfirmResponse(byeMessage, _messageCounter++);
         
+        _client.Close();
+        _client.Dispose();
         _fsmState = FsmState.End;
     }
 
@@ -152,6 +164,13 @@ public class UdpConnection : IConnection
 
         if (!IsItNewMessage(messageId))
             return;
+
+        if (_fsmState is FsmState.Start)
+        {
+            await Task.Delay((_maxRetransmissions/2) * _confirmationTimeout);
+            _client.Connect(endPoint);
+            _fsmState = FsmState.Auth;
+        }
 
         if (!result)
         {
@@ -167,7 +186,6 @@ public class UdpConnection : IConnection
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
 
         _receivedMessages.Enqueue(messageId);
-        _client.Connect(endPoint);
         _fsmState = FsmState.Open;
         _taskCompletionSource.SetResult(true);
     }
@@ -206,6 +224,25 @@ public class UdpConnection : IConnection
         _receivedMessages.Enqueue(messageId);
         await Console.Out.WriteLineAsync($"{displayName}: {messageContents}");
     }
+    
+    private async Task Err(ushort messageId, string displayName, string messageContents)
+    {
+        await SendConfirmMessage(messageId);
+
+        if (_receivedMessages.Contains(messageId))
+            return;
+
+        _receivedMessages.Enqueue(messageId);
+        await Console.Error.WriteLineAsync($"ERR FROM {displayName}: {messageContents}");
+    }
+    
+    private async Task ServerError(ushort messageId)
+    {
+        await SendConfirmMessage(messageId);
+
+        var errorMessage = UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, ErrorMessage.ServerError);
+        await SendAndAwaitConfirmResponse(errorMessage, _messageCounter++);
+    }
 
     private async Task SendAndAwaitConfirmResponse(byte[] message, ushort messageId, IPEndPoint? endPoint = null)
     {
@@ -216,9 +253,7 @@ public class UdpConnection : IConnection
             await Task.Delay(_confirmationTimeout);
 
             if (_awaitedMessages.Remove(messageId))
-            {
                 return;
-            }
         }
     }
 
