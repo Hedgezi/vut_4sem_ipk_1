@@ -1,29 +1,33 @@
+using System.Text;
+
 namespace vut_ipk1.Tcp.Messages;
 
 public static class TcpMessageGenerator
 {
-    public static string GenerateAuthMessage(string username, string displayName, string secret)
+    private static readonly Encoding TextEncoding = Encoding.ASCII;
+    
+    public static byte[] GenerateAuthMessage(string username, string displayName, string secret)
     {
-        return $"AUTH {username} AS {displayName} USING {secret}\r\n";
+        return TextEncoding.GetBytes($"AUTH {username} AS {displayName} USING {secret}\r\n");
     }
     
-    public static string GenerateJoinMessage(string channelId, string displayName)
+    public static byte[] GenerateJoinMessage(string channelId, string displayName)
     {
-        return $"JOIN {channelId} AS {displayName}\r\n";
+        return TextEncoding.GetBytes($"JOIN {channelId} AS {displayName}\r\n");
     }
     
-    public static string GenerateMsgMessage(string displayName, string contents)
+    public static byte[] GenerateMsgMessage(string displayName, string contents)
     {
-        return $"MSG FROM {displayName} IS {contents}\r\n";
+        return TextEncoding.GetBytes($"MSG FROM {displayName} IS {contents}\r\n");
     }
     
-    public static string GenerateErrMessage(string displayName, string contents)
+    public static byte[] GenerateErrMessage(string displayName, string contents)
     {
-        return $"ERR FROM {displayName} IS {contents}\r\n";
+        return TextEncoding.GetBytes($"ERR FROM {displayName} IS {contents}\r\n");
     }
     
-    public static string GenerateByeMessage()
+    public static byte[] GenerateByeMessage()
     {
-        return "BYE\r\n";
+        return TextEncoding.GetBytes("BYE\r\n");
     }
 }
