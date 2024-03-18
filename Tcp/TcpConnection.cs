@@ -1,8 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using vut_ipk1.Common.Enums;
 using vut_ipk1.Common.Interfaces;
-using vut_ipk1.Common.Structures;
+using vut_ipk1.Tcp.Messages;
 
 namespace vut_ipk1.Tcp;
 
@@ -15,7 +16,6 @@ public class TcpConnection : IConnection
     
     private FsmState _fsmState = FsmState.Start;
     private string _displayName;
-    private TaskCompletionSource<bool> _taskCompletionSource;
 
     private readonly TcpClient _client = new TcpClient(new IPEndPoint(IPAddress.Any, 0));
 
@@ -27,33 +27,57 @@ public class TcpConnection : IConnection
         this._maxRetransmissions = maxRetransmissions;
     }
 
-    public Task MainLoopAsync()
+    public async Task MainLoopAsync()
     {
         throw new NotImplementedException();
     }
 
-    public Task SendMessage(string message)
+    public async Task SendMessage(string message)
     {
-        throw new NotImplementedException();
+        var msgMessage = TcpMessageGenerator.GenerateMsgMessage(_displayName, message);
+        await _client.GetStream().WriteAsync(msgMessage);
     }
 
-    public Task Auth(string username, string displayName, string secret)
+    public async Task Auth(string username, string displayName, string secret)
     {
-        throw new NotImplementedException();
+        if (_fsmState is not (FsmState.Start or FsmState.Auth))
+        {
+            await Console.Out.WriteLineAsync(ErrorMessage.AuthInWrongState);
+            return;
+        }
+        
     }
 
-    public Task Join(string channelName)
+    public async Task Join(string channelName)
     {
         throw new NotImplementedException();
     }
 
     public void Rename(string newDisplayName)
     {
-        throw new NotImplementedException();
+        if (_fsmState != FsmState.Open)
+        {
+            Console.WriteLine(ErrorMessage.RenameInWrongState);
+            return;
+        }
+
+        _displayName = newDisplayName;
     }
 
-    public Task EndSession()
+    public async Task EndSession()
     {
-        throw new NotImplementedException();
+        if (_fsmState is FsmState.Start)
+        {
+            _client.Close();
+            _client.Dispose();
+            return;
+        }
+        
+        var byeMessage = TcpMessageGenerator.GenerateByeMessage();
+        await _client.GetStream().WriteAsync(byeMessage);
+        
+        _client.Close();
+        _client.Dispose();
+        _fsmState = FsmState.End;
     }
 }
