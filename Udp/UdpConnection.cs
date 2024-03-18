@@ -68,8 +68,6 @@ public class UdpConnection : IConnection
                     var (errMessageId, errDisplayName, errMessageContents) = UdpMessageParser.ParseMsgMessage(message);
                     
                     await Err(errMessageId, errDisplayName, errMessageContents);
-                    
-                    await EndSession();
                     return;
                 case MessageType.BYE:
                     _client.Close();
@@ -79,7 +77,6 @@ public class UdpConnection : IConnection
                     var incomingMessageId = BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]);
                     await ServerError(incomingMessageId);
                     
-                    await EndSession();
                     return;
             }
         }
@@ -97,6 +94,7 @@ public class UdpConnection : IConnection
         _taskCompletionSource = new TaskCompletionSource<bool>();
 
         var authMessage = UdpMessageGenerator.GenerateAuthMessage(_messageCounter, username, displayName, secret);
+        _awaitedMessages.Add(_messageCounter);
         await SendAndAwaitConfirmResponse(authMessage, _messageCounter++,
             _fsmState == FsmState.Auth ? null : new IPEndPoint(_ip, _port));
         await _taskCompletionSource.Task;
@@ -113,6 +111,7 @@ public class UdpConnection : IConnection
         _taskCompletionSource = new TaskCompletionSource<bool>();
 
         var joinMessage = UdpMessageGenerator.GenerateJoinMessage(_messageCounter, _displayName, channelName);
+        _awaitedMessages.Add(_messageCounter);
         await SendAndAwaitConfirmResponse(joinMessage, _messageCounter++);
         await _taskCompletionSource.Task;
     }
@@ -167,7 +166,7 @@ public class UdpConnection : IConnection
 
         if (_fsmState is FsmState.Start)
         {
-            await Task.Delay((_maxRetransmissions/2) * _confirmationTimeout);
+            await Task.Delay(_maxRetransmissions / 2 * _confirmationTimeout);
             _client.Connect(endPoint);
             _fsmState = FsmState.Auth;
         }
@@ -178,9 +177,9 @@ public class UdpConnection : IConnection
             return;
         }
 
-        if (refMessageId != _messageCounter - 1)
+        if (!_awaitedMessages.Remove(refMessageId))
         {
-            // TODO: error
+            // TODO: close connection
         }
 
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
@@ -203,9 +202,9 @@ public class UdpConnection : IConnection
             return;
         }
 
-        if (refMessageId != _messageCounter - 1)
+        if (!_awaitedMessages.Remove(refMessageId))
         {
-            // TODO: error
+            // TODO: close connection
         }
 
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
@@ -234,6 +233,8 @@ public class UdpConnection : IConnection
 
         _receivedMessages.Enqueue(messageId);
         await Console.Error.WriteLineAsync($"ERR FROM {displayName}: {messageContents}");
+        
+        await EndSession();
     }
     
     private async Task ServerError(ushort messageId)
@@ -242,6 +243,8 @@ public class UdpConnection : IConnection
 
         var errorMessage = UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, ErrorMessage.ServerError);
         await SendAndAwaitConfirmResponse(errorMessage, _messageCounter++);
+
+        await EndSession();
     }
 
     private async Task SendAndAwaitConfirmResponse(byte[] message, ushort messageId, IPEndPoint? endPoint = null)
