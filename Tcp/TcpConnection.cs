@@ -16,6 +16,7 @@ public class TcpConnection : IConnection
     
     private FsmState _fsmState = FsmState.Start;
     private string _displayName;
+    private TaskCompletionSource<bool> _taskCompletionSource;
 
     private readonly TcpClient _client = new TcpClient(new IPEndPoint(IPAddress.Any, 0));
 
@@ -46,6 +47,15 @@ public class TcpConnection : IConnection
             return;
         }
         
+        _displayName = displayName;
+        _taskCompletionSource = new TaskCompletionSource<bool>();
+
+        if (!_client.Connected)
+            await _client.ConnectAsync(_ip, _port);
+        
+        var authMessage = TcpMessageGenerator.GenerateAuthMessage(username, displayName, secret);
+        await _client.GetStream().WriteAsync(authMessage);
+        await _taskCompletionSource.Task;
     }
 
     public async Task Join(string channelName)
@@ -68,7 +78,6 @@ public class TcpConnection : IConnection
     {
         if (_fsmState is FsmState.Start)
         {
-            _client.Close();
             _client.Dispose();
             return;
         }
@@ -79,5 +88,21 @@ public class TcpConnection : IConnection
         _client.Close();
         _client.Dispose();
         _fsmState = FsmState.End;
+    }
+    
+    private async Task AuthReplyRetrieval(bool result, string messageContents)
+    {
+        _fsmState = FsmState.Auth;
+        
+        if (!result)
+        {
+            await Console.Error.WriteLineAsync($"Failure: {messageContents}");
+            return;
+        }
+
+        await Console.Out.WriteLineAsync($"Success: {messageContents}");
+        
+        _fsmState = FsmState.Open;
+        _taskCompletionSource.SetResult(true);
     }
 }
