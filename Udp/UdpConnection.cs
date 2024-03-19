@@ -49,20 +49,20 @@ public class UdpConnection : IConnection
                     var (replyAuthMessageId, replyAuthResult, replyAuthRefMessageId, replyAuthMessageContents) =
                         UdpMessageParser.ParseReplyMessage(message);
 
-                    await Task.Run(() => AuthReplyRetrieval(replyAuthMessageId, replyAuthResult,
+                    Task.Run(() => AuthReplyRetrieval(replyAuthMessageId, replyAuthResult,
                         replyAuthRefMessageId, replyAuthMessageContents, receivedMessage.RemoteEndPoint));
                     break;
                 case MessageType.REPLY when _fsmState is FsmState.Open:
                     var (replyJoinMessageId, replyJoinResult, replyJoinRefMessageId, replyJoinMessageContents) =
                         UdpMessageParser.ParseReplyMessage(message);
 
-                    await Task.Run(() => JoinReplyRetrieval(replyJoinMessageId, replyJoinResult,
+                    Task.Run(() => JoinReplyRetrieval(replyJoinMessageId, replyJoinResult,
                         replyJoinRefMessageId, replyJoinMessageContents));
                     break;
                 case MessageType.MSG:
                     var (msgMessageId, msgDisplayName, msgMessageContents) = UdpMessageParser.ParseMsgMessage(message);
 
-                    await Task.Run(() => Msg(msgMessageId, msgDisplayName, msgMessageContents));
+                    Task.Run(() => Msg(msgMessageId, msgDisplayName, msgMessageContents));
                     break;
                 case MessageType.ERR:
                     var (errMessageId, errDisplayName, errMessageContents) = UdpMessageParser.ParseMsgMessage(message);
@@ -166,7 +166,7 @@ public class UdpConnection : IConnection
 
         if (_fsmState is FsmState.Start)
         {
-            await Task.Delay(_maxRetransmissions / 2 * _confirmationTimeout);
+            await Task.Delay(100);
             _client.Connect(endPoint);
             _fsmState = FsmState.Auth;
         }
