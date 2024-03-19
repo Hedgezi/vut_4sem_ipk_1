@@ -31,6 +31,39 @@ public class TcpConnection : IConnection
         while (true)
         {
             var receivedMessage = await _tcpMessageReceiver.ReceiveMessageAsync(_client);
+
+            switch ((MessageType)Enum.Parse(typeof(MessageType), receivedMessage.Split(' ')[0]))
+            {
+                case MessageType.REPLY when _fsmState is FsmState.Auth or FsmState.Start:
+                    var (replyAuthResult, replyAuthMessageContents) = TcpMessageParser.ParseReplyMessage(receivedMessage);
+
+                    Task.Run(() => AuthReplyRetrieval(replyAuthResult, replyAuthMessageContents));
+                    break;
+                case MessageType.REPLY when _fsmState is FsmState.Open:
+                    var (replyJoinResult, replyJoinMessageContents) = TcpMessageParser.ParseReplyMessage(receivedMessage);
+
+                    Task.Run(() => JoinReplyRetrieval(replyJoinResult, replyJoinMessageContents));
+                    break;
+                case MessageType.MSG:
+                    var (msgDisplayName, msgMessageContents) = TcpMessageParser.ParseMsgMessage(receivedMessage);
+
+                    await Console.Out.WriteLineAsync($"{msgDisplayName}: {msgMessageContents}");
+                    break;
+                case MessageType.ERR:
+                    var (errDisplayName, errMessageContents) = TcpMessageParser.ParseMsgMessage(receivedMessage);
+                    
+                    await Console.Error.WriteLineAsync($"ERR FROM {errDisplayName}: {errMessageContents}");
+                    await EndSession();
+                    return;
+                case MessageType.BYE:
+                    _client.Close();
+                    
+                    return;
+                default:
+                    await ServerError();
+                    
+                    return;
+            }
         }
     }
 
@@ -95,6 +128,7 @@ public class TcpConnection : IConnection
     {
         if (_fsmState is FsmState.Start)
         {
+            _client.Close();
             _client.Dispose();
             return;
         }
@@ -134,5 +168,13 @@ public class TcpConnection : IConnection
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
 
         _taskCompletionSource.SetResult(true);
+    }
+    
+    private async Task ServerError()
+    {
+        var errorMessage = TcpMessageGenerator.GenerateErrMessage(_displayName, ErrorMessage.ServerError);
+        await _client.GetStream().WriteAsync(errorMessage);
+
+        await EndSession();
     }
 }
