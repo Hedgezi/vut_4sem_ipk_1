@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using vut_ipk1.Common.Enums;
 using vut_ipk1.Common.Interfaces;
+using vut_ipk1.Tcp.Facades;
 using vut_ipk1.Tcp.Messages;
 
 namespace vut_ipk1.Tcp;
@@ -11,30 +12,36 @@ public class TcpConnection : IConnection
 {
     private readonly IPAddress _ip;
     private readonly int _port;
-    private readonly int _confirmationTimeout;
-    private readonly int _maxRetransmissions;
     
     private FsmState _fsmState = FsmState.Start;
     private string _displayName;
     private TaskCompletionSource<bool> _taskCompletionSource;
 
     private readonly TcpClient _client = new TcpClient(new IPEndPoint(IPAddress.Any, 0));
+    private readonly TcpMessageReceiver _tcpMessageReceiver = new();
 
-    public TcpConnection(IPAddress ip, int port, int confirmationTimeout, int maxRetransmissions)
+    public TcpConnection(IPAddress ip, int port)
     {
         this._ip = ip;
         this._port = port;
-        this._confirmationTimeout = confirmationTimeout;
-        this._maxRetransmissions = maxRetransmissions;
     }
 
     public async Task MainLoopAsync()
     {
-        throw new NotImplementedException();
+        while (true)
+        {
+            var receivedMessage = await _tcpMessageReceiver.ReceiveMessageAsync(_client);
+        }
     }
 
     public async Task SendMessage(string message)
     {
+        if (_fsmState != FsmState.Open)
+        {
+            await Console.Out.WriteLineAsync(ErrorMessage.SendMessageInWrongState);
+            return;
+        }
+        
         var msgMessage = TcpMessageGenerator.GenerateMsgMessage(_displayName, message);
         await _client.GetStream().WriteAsync(msgMessage);
     }
@@ -60,7 +67,17 @@ public class TcpConnection : IConnection
 
     public async Task Join(string channelName)
     {
-        throw new NotImplementedException();
+        if (_fsmState != FsmState.Open)
+        {
+            await Console.Out.WriteLineAsync(ErrorMessage.JoinInWrongState);
+            return;
+        }
+        
+        _taskCompletionSource = new TaskCompletionSource<bool>();
+        
+        var joinMessage = TcpMessageGenerator.GenerateJoinMessage(channelName, _displayName);
+        await _client.GetStream().WriteAsync(joinMessage);
+        await _taskCompletionSource.Task;
     }
 
     public void Rename(string newDisplayName)
@@ -103,6 +120,19 @@ public class TcpConnection : IConnection
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
         
         _fsmState = FsmState.Open;
+        _taskCompletionSource.SetResult(true);
+    }
+    
+    private async Task JoinReplyRetrieval(bool result, string messageContents)
+    {
+        if (!result)
+        {
+            await Console.Error.WriteLineAsync($"Failure: {messageContents}");
+            return;
+        }
+
+        await Console.Out.WriteLineAsync($"Success: {messageContents}");
+
         _taskCompletionSource.SetResult(true);
     }
 }
