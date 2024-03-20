@@ -82,6 +82,18 @@ public class UdpConnection : IConnection
             }
         }
     }
+    
+    public async Task SendMessage(string message)
+    {
+        if (_fsmState != FsmState.Open)
+        {
+            await Console.Out.WriteLineAsync(ErrorMessage.SendMessageInWrongState);
+            return;
+        }
+
+        var messageToSend = UdpMessageGenerator.GenerateMsgMessage(_messageCounter, _displayName, message);
+        await SendAndAwaitConfirmResponse(messageToSend, _messageCounter++);
+    }
 
     public async Task Auth(string username, string displayName, string secret)
     {
@@ -119,18 +131,6 @@ public class UdpConnection : IConnection
         await _taskCompletionSource.Task;
     }
 
-    public async Task SendMessage(string message)
-    {
-        if (_fsmState != FsmState.Open)
-        {
-            await Console.Out.WriteLineAsync(ErrorMessage.SendMessageInWrongState);
-            return;
-        }
-
-        var messageToSend = UdpMessageGenerator.GenerateMsgMessage(_messageCounter, _displayName, message);
-        await SendAndAwaitConfirmResponse(messageToSend, _messageCounter++);
-    }
-
     public void Rename(string newDisplayName)
     {
         if (_fsmState != FsmState.Open)
@@ -153,6 +153,30 @@ public class UdpConnection : IConnection
         _client.Close();
         _client.Dispose();
         _fsmState = FsmState.End;
+    }
+    
+    private async Task Msg(ushort messageId, string displayName, string messageContents)
+    {
+        await SendConfirmMessage(messageId);
+
+        if (_receivedMessages.Contains(messageId))
+            return;
+
+        _receivedMessages.Enqueue(messageId);
+        await Console.Out.WriteLineAsync($"{displayName}: {messageContents}");
+    }
+
+    private async Task Err(ushort messageId, string displayName, string messageContents)
+    {
+        await SendConfirmMessage(messageId);
+
+        if (_receivedMessages.Contains(messageId))
+            return;
+
+        _receivedMessages.Enqueue(messageId);
+        await Console.Error.WriteLineAsync($"ERR FROM {displayName}: {messageContents}");
+
+        await EndSession();
     }
 
     private async Task AuthReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents,
@@ -214,30 +238,6 @@ public class UdpConnection : IConnection
 
         _receivedMessages.Enqueue(messageId);
         _taskCompletionSource.SetResult(true);
-    }
-
-    private async Task Msg(ushort messageId, string displayName, string messageContents)
-    {
-        await SendConfirmMessage(messageId);
-
-        if (_receivedMessages.Contains(messageId))
-            return;
-
-        _receivedMessages.Enqueue(messageId);
-        await Console.Out.WriteLineAsync($"{displayName}: {messageContents}");
-    }
-
-    private async Task Err(ushort messageId, string displayName, string messageContents)
-    {
-        await SendConfirmMessage(messageId);
-
-        if (_receivedMessages.Contains(messageId))
-            return;
-
-        _receivedMessages.Enqueue(messageId);
-        await Console.Error.WriteLineAsync($"ERR FROM {displayName}: {messageContents}");
-
-        await EndSession();
     }
 
     private async Task ServerError(ushort messageId)
