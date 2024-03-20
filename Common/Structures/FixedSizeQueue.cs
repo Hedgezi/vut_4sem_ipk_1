@@ -24,6 +24,11 @@ public class FixedSizeQueue<T>
             queue.Dequeue(); // Remove the oldest element if the max size is reached
         }
         
+        if (queue.Contains(item))
+        {
+            return;
+        }
+        
         queue.Enqueue(item); // Add the new item to the queue
     }
 
