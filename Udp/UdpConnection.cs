@@ -15,9 +15,10 @@ public class UdpConnection : IConnection
     private readonly int _confirmationTimeout;
     private readonly int _maxRetransmissions;
 
-    private ushort _messageCounter = 0;
-    private FsmState _fsmState = FsmState.Start;
     private string _displayName;
+    private ushort _messageCounter = 1;
+    private ushort _currentlyWaitingForId = 0;
+    private FsmState _fsmState = FsmState.Start;
     private readonly List<ushort> _awaitedMessages = [];
     private readonly FixedSizeQueue<ushort> _receivedMessages = new(100);
     private TaskCompletionSource<bool> _taskCompletionSource;
@@ -66,17 +67,17 @@ public class UdpConnection : IConnection
                     break;
                 case MessageType.ERR:
                     var (errMessageId, errDisplayName, errMessageContents) = UdpMessageParser.ParseMsgMessage(message);
-                    
+
                     await Err(errMessageId, errDisplayName, errMessageContents);
                     return;
                 case MessageType.BYE:
                     _client.Close();
-                    
+
                     return;
                 default:
                     var incomingMessageId = BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]);
+
                     await ServerError(incomingMessageId);
-                    
                     return;
             }
         }
@@ -94,9 +95,10 @@ public class UdpConnection : IConnection
         _taskCompletionSource = new TaskCompletionSource<bool>();
 
         var authMessage = UdpMessageGenerator.GenerateAuthMessage(_messageCounter, username, displayName, secret);
-        _awaitedMessages.Add(_messageCounter);
+        _currentlyWaitingForId = _messageCounter;
         await SendAndAwaitConfirmResponse(authMessage, _messageCounter++,
             _fsmState == FsmState.Auth ? null : new IPEndPoint(_ip, _port));
+
         await _taskCompletionSource.Task;
     }
 
@@ -111,8 +113,9 @@ public class UdpConnection : IConnection
         _taskCompletionSource = new TaskCompletionSource<bool>();
 
         var joinMessage = UdpMessageGenerator.GenerateJoinMessage(_messageCounter, _displayName, channelName);
-        _awaitedMessages.Add(_messageCounter);
+        _currentlyWaitingForId = _messageCounter;
         await SendAndAwaitConfirmResponse(joinMessage, _messageCounter++);
+
         await _taskCompletionSource.Task;
     }
 
@@ -141,16 +144,12 @@ public class UdpConnection : IConnection
 
     public async Task EndSession()
     {
-        if (_fsmState is FsmState.Start)
+        if (_fsmState != FsmState.Start)
         {
-            _client.Close();
-            _client.Dispose();
-            return;
+            var byeMessage = UdpMessageGenerator.GenerateByeMessage(_messageCounter);
+            await SendAndAwaitConfirmResponse(byeMessage, _messageCounter++);
         }
-        
-        var byeMessage = UdpMessageGenerator.GenerateByeMessage(_messageCounter);
-        await SendAndAwaitConfirmResponse(byeMessage, _messageCounter++);
-        
+
         _client.Close();
         _client.Dispose();
         _fsmState = FsmState.End;
@@ -163,6 +162,13 @@ public class UdpConnection : IConnection
 
         if (!IsItNewMessage(messageId))
             return;
+        
+        if (_currentlyWaitingForId != refMessageId)
+        {
+            // TODO: close connection
+        }
+        
+        _currentlyWaitingForId = 0;
 
         if (_fsmState is FsmState.Start)
         {
@@ -175,11 +181,6 @@ public class UdpConnection : IConnection
         {
             await Console.Error.WriteLineAsync($"Failure: {messageContents}");
             return;
-        }
-
-        if (!_awaitedMessages.Remove(refMessageId))
-        {
-            // TODO: close connection
         }
 
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
@@ -195,18 +196,20 @@ public class UdpConnection : IConnection
 
         if (!IsItNewMessage(messageId))
             return;
+        
+        if (_currentlyWaitingForId != refMessageId)
+        {
+            // TODO: close connection
+        }
+        
+        _currentlyWaitingForId = 0;
 
         if (!result)
         {
             await Console.Error.WriteLineAsync($"Failure: {messageContents}");
             return;
         }
-
-        if (!_awaitedMessages.Remove(refMessageId))
-        {
-            // TODO: close connection
-        }
-
+        
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
 
         _receivedMessages.Enqueue(messageId);
@@ -223,7 +226,7 @@ public class UdpConnection : IConnection
         _receivedMessages.Enqueue(messageId);
         await Console.Out.WriteLineAsync($"{displayName}: {messageContents}");
     }
-    
+
     private async Task Err(ushort messageId, string displayName, string messageContents)
     {
         await SendConfirmMessage(messageId);
@@ -233,15 +236,16 @@ public class UdpConnection : IConnection
 
         _receivedMessages.Enqueue(messageId);
         await Console.Error.WriteLineAsync($"ERR FROM {displayName}: {messageContents}");
-        
+
         await EndSession();
     }
-    
+
     private async Task ServerError(ushort messageId)
     {
         await SendConfirmMessage(messageId);
 
-        var errorMessage = UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, ErrorMessage.ServerError);
+        var errorMessage =
+            UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, ErrorMessage.ServerError);
         await SendAndAwaitConfirmResponse(errorMessage, _messageCounter++);
 
         await EndSession();
@@ -258,6 +262,11 @@ public class UdpConnection : IConnection
             if (_awaitedMessages.Remove(messageId))
                 return;
         }
+
+        await Console.Error.WriteLineAsync(ErrorMessage.NoResponse);
+        // TODO: close connection
+        
+        Environment.Exit(1);
     }
 
     private async Task SendConfirmMessage(ushort messageId, IPEndPoint? endPoint = null)

@@ -11,4 +11,6 @@ public static class ErrorMessage
     public const string JoinInWrongState = "You can't join a channel, if you're not authenticated.";
     
     public const string ServerError = "Server error.";
+    
+    public const string NoResponse = "No response from server.";
 }
