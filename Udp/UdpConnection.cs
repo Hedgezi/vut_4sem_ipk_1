@@ -186,12 +186,12 @@ public class UdpConnection : IConnection
 
         if (!IsItNewMessage(messageId))
             return;
+        _receivedMessages.Enqueue(messageId);
         
         if (_currentlyWaitingForId != refMessageId)
         {
             // TODO: close connection
         }
-        
         _currentlyWaitingForId = 0;
 
         if (_fsmState is FsmState.Start)
@@ -209,7 +209,6 @@ public class UdpConnection : IConnection
 
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
 
-        _receivedMessages.Enqueue(messageId);
         _fsmState = FsmState.Open;
         _taskCompletionSource.SetResult(true);
     }
@@ -220,12 +219,12 @@ public class UdpConnection : IConnection
 
         if (!IsItNewMessage(messageId))
             return;
+        _receivedMessages.Enqueue(messageId);
         
         if (_currentlyWaitingForId != refMessageId)
         {
             // TODO: close connection
         }
-        
         _currentlyWaitingForId = 0;
 
         if (!result)
@@ -236,7 +235,6 @@ public class UdpConnection : IConnection
         
         await Console.Out.WriteLineAsync($"Success: {messageContents}");
 
-        _receivedMessages.Enqueue(messageId);
         _taskCompletionSource.SetResult(true);
     }
 
