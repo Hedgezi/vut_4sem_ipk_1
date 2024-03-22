@@ -10,9 +10,9 @@ public static class UdpMessageParser
     public static (ushort messageId, bool result, ushort refMessageId, string messageContents) ParseReplyMessage(
         byte[] message)
     {
-        var messageId = BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]);
+        var messageId = BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]);
         var result = message[3] == 0x01;
-        var refMessageId = BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[4..6]);
+        var refMessageId = BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[4..6]);
         var messageContents = ConvertAsciiBytesToString(message, 6);
 
         return (messageId, result, refMessageId, messageContents);
@@ -20,7 +20,7 @@ public static class UdpMessageParser
 
     public static (ushort messageId, string displayName, string messageContents) ParseMsgMessage(byte[] message)
     {
-        var messageId = BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]);
+        var messageId = BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]);
         var displayName = ConvertAsciiBytesToString(message, 3);
         var messageContents = ConvertAsciiBytesToString(message, 3 + displayName.Length);
 

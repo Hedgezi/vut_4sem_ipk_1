@@ -43,7 +43,7 @@ public class UdpConnection : IConnection
             switch ((MessageType)message[0])
             {
                 case MessageType.CONFIRM:
-                    _awaitedMessages.Add(BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]));
+                    _awaitedMessages.Add(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
 
                     break;
                 case MessageType.REPLY when _fsmState is FsmState.Auth or FsmState.Start:
