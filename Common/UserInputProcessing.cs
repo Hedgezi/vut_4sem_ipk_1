@@ -1,3 +1,4 @@
+using vut_ipk1.Common.Enums;
 using vut_ipk1.Common.Interfaces;
 
 namespace vut_ipk1.Common;
@@ -10,7 +11,7 @@ public class UserInputProcessing(
     {
         while (true)
         {
-            var input = await Console.In.ReadLineAsync(); // TODO: Trim input
+            var input = await Console.In.ReadLineAsync();
         
             if (input == null)
                 continue;
@@ -19,21 +20,21 @@ public class UserInputProcessing(
             {
                 var splitInput = input.Split(' ', 2);
                 var command = splitInput[0];
-                var arguments = splitInput.Length > 1 ? splitInput[1] : null;
+                var arguments = splitInput.Length > 1 ? splitInput[1].TrimEnd() : null;
         
                 switch (command)
                 {
                     case "/auth":
                         if (arguments == null)
                         {
-                            await Console.Error.WriteLineAsync("Invalid command usage.");
+                            await Console.Error.WriteLineAsync(ErrorMessage.InvalidCommandUsage);
                             continue;
                         }
         
                         var splitArguments = arguments.Split(' ');
                         if (splitArguments.Length != 3)
                         {
-                            await Console.Error.WriteLineAsync("Invalid command usage.");
+                            await Console.Error.WriteLineAsync(ErrorMessage.InvalidCommandUsage);
                             continue;
                         }
         
@@ -43,7 +44,13 @@ public class UserInputProcessing(
                     case "/join":
                         if (arguments == null)
                         {
-                            await Console.Error.WriteLineAsync("Invalid command usage.");
+                            await Console.Error.WriteLineAsync(ErrorMessage.InvalidCommandUsage);
+                            continue;
+                        }
+                        
+                        if (arguments.ToCharArray().Any(character => character < 33 || character > 126))
+                        {
+                            await Console.Error.WriteLineAsync("Invalid channel name.");
                             continue;
                         }
                         
@@ -53,19 +60,17 @@ public class UserInputProcessing(
                     case "/rename":
                         if (arguments == null)
                         {
-                            await Console.Error.WriteLineAsync("Invalid command usage.");
+                            await Console.Error.WriteLineAsync(ErrorMessage.InvalidCommandUsage);
                             continue;
                         }
-                        
-                        var possibleDisplayName = arguments[1].ToString();
-                        
-                        if (possibleDisplayName.ToCharArray().Any(character => character < 33 || character > 126))
+
+                        if (arguments.ToCharArray().Any(character => character < 33 || character > 126))
                         {
                             await Console.Error.WriteLineAsync("Invalid display name.");
                             continue;
                         }
                         
-                        connection.Rename(possibleDisplayName);
+                        connection.Rename(arguments);
                     
                         break;
                     default:
