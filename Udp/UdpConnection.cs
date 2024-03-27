@@ -124,7 +124,7 @@ public class UdpConnection : IConnection
 
         _taskCompletionSource = new TaskCompletionSource<bool>();
 
-        var joinMessage = UdpMessageGenerator.GenerateJoinMessage(_messageCounter, _displayName, channelName);
+        var joinMessage = UdpMessageGenerator.GenerateJoinMessage(_messageCounter, channelName, _displayName);
         _currentlyWaitingForId = _messageCounter;
         await SendAndAwaitConfirmResponse(joinMessage, _messageCounter++);
 
@@ -196,7 +196,7 @@ public class UdpConnection : IConnection
 
         if (_fsmState is FsmState.Start)
         {
-            await Task.Delay(100);
+            await Task.Delay(_confirmationTimeout);
             _client.Connect(endPoint);
             _fsmState = FsmState.Auth;
         }
