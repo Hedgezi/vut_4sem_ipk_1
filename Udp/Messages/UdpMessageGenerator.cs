@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using vut_ipk1.Common.Enums;
 
@@ -12,8 +13,7 @@ public static class UdpMessageGenerator
         var message = new byte[3];
         
         message[0] = (byte)MessageType.CONFIRM;
-        message[1] = (byte)id;
-        message[2] = (byte)(id >> 8);
+        BinaryPrimitives.WriteUInt16BigEndian(message.AsSpan(1, 2), id);
         
         return message;
     }
@@ -27,8 +27,7 @@ public static class UdpMessageGenerator
         var message = new byte[1 + 2 + usernameBytes.Length + displayNameBytes.Length + secretBytes.Length];
         
         message[0] = (byte)MessageType.AUTH;
-        message[1] = (byte)id;
-        message[2] = (byte)(id >> 8);
+        BinaryPrimitives.WriteUInt16BigEndian(message.AsSpan(1, 2), id);
         
         Array.Copy(usernameBytes, 0, message, 3, usernameBytes.Length);
         Array.Copy(displayNameBytes, 0, message, 3 + usernameBytes.Length, displayNameBytes.Length);
@@ -45,8 +44,7 @@ public static class UdpMessageGenerator
         var message = new byte[1 + 2 + channelIdBytes.Length + displayNameBytes.Length];
         
         message[0] = (byte)MessageType.JOIN;
-        message[1] = (byte)id;
-        message[2] = (byte)(id >> 8);
+        BinaryPrimitives.WriteUInt16BigEndian(message.AsSpan(1, 2), id);
         
         Array.Copy(channelIdBytes, 0, message, 3, channelIdBytes.Length);
         Array.Copy(displayNameBytes, 0, message, 3 + channelIdBytes.Length, displayNameBytes.Length);
@@ -62,8 +60,7 @@ public static class UdpMessageGenerator
         var message = new byte[1 + 2 + displayNameBytes.Length + contentsBytes.Length];
         
         message[0] = (byte)MessageType.MSG;
-        message[1] = (byte)id;
-        message[2] = (byte)(id >> 8);
+        BinaryPrimitives.WriteUInt16BigEndian(message.AsSpan(1, 2), id);
         
         Array.Copy(displayNameBytes, 0, message, 3, displayNameBytes.Length);
         Array.Copy(contentsBytes, 0, message, 3 + displayNameBytes.Length, contentsBytes.Length);
@@ -79,8 +76,7 @@ public static class UdpMessageGenerator
         var message = new byte[1 + 2 + displayNameBytes.Length + contentsBytes.Length];
         
         message[0] = (byte)MessageType.ERR;
-        message[1] = (byte)id;
-        message[2] = (byte)(id >> 8);
+        BinaryPrimitives.WriteUInt16BigEndian(message.AsSpan(1, 2), id);
         
         Array.Copy(displayNameBytes, 0, message, 3, displayNameBytes.Length);
         Array.Copy(contentsBytes, 0, message, 3 + displayNameBytes.Length, contentsBytes.Length);
@@ -93,8 +89,7 @@ public static class UdpMessageGenerator
         var message = new byte[3];
         
         message[0] = (byte)MessageType.BYE;
-        message[1] = (byte)id;
-        message[2] = (byte)(id >> 8);
+        BinaryPrimitives.WriteUInt16BigEndian(message.AsSpan(1, 2), id);
         
         return message;
     }
