@@ -16,6 +16,7 @@ public class TcpConnection : IConnection
     private FsmState _fsmState = FsmState.Start;
     private string _displayName;
     private TaskCompletionSource<bool> _taskCompletionSource;
+    private readonly TaskCompletionSource<bool> _isConnected = new TaskCompletionSource<bool>();
 
     private readonly TcpClient _client = new TcpClient(new IPEndPoint(IPAddress.Any, 0));
     private readonly TcpMessageReceiver _tcpMessageReceiver = new();
@@ -28,6 +29,8 @@ public class TcpConnection : IConnection
 
     public async Task MainLoopAsync()
     {
+        await _isConnected.Task;
+            
         while (true)
         {
             var receivedMessage = await _tcpMessageReceiver.ReceiveMessageAsync(_client);
@@ -91,8 +94,11 @@ public class TcpConnection : IConnection
         _taskCompletionSource = new TaskCompletionSource<bool>();
 
         if (!_client.Connected)
+        {
             await _client.ConnectAsync(_ip, _port);
-        
+            _isConnected.SetResult(true);
+        }
+
         var authMessage = TcpMessageGenerator.GenerateAuthMessage(username, displayName, secret);
         await _client.GetStream().WriteAsync(authMessage);
         await _taskCompletionSource.Task;

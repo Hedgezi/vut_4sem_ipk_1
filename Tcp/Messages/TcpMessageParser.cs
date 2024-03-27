@@ -7,7 +7,7 @@ public static class TcpMessageParser
 {
     public static (bool result, string messageContents) ParseReplyMessage(string message)
     {
-        var match = Regex.IsMatch(message, @"^REPLY (OK|NOK) IS [\x20-\x7E]{1,1400}\r\n$");
+        var match = Regex.IsMatch(message, @"^REPLY (OK|NOK) IS [\x20-\x7E]{1,1400}$");
         if (!match)
             throw new ArgumentException("Invalid message format");
         
@@ -15,34 +15,34 @@ public static class TcpMessageParser
         
         var result = messageParts[1] == "OK";
 
-        return (result, messageParts[3]);
+        return (result, messageParts[3].TrimEnd());
     }
 
     public static (string displayName, string messageContents) ParseMsgMessage(string message)
     {
-        var match = Regex.IsMatch(message, @"^MSG FROM [\x21-\x7E]{1,20} IS [\x20-\x7E]{1,1400}\r\n$");
+        var match = Regex.IsMatch(message, @"^MSG FROM [\x21-\x7E]{1,20} IS [\x20-\x7E]{1,1400}$");
         if (!match)
             throw new ArgumentException("Invalid message format");
         
-        var messageParts = message.Trim().Split(' ');
+        var messageParts = message.Trim().Split(' ', 5);
         
         var displayName = messageParts[2];
-        var messageContents = messageParts[4..];
+        var messageContents = messageParts[4];
 
-        return (displayName, messageContents.ToString());
+        return (displayName, messageContents.TrimEnd());
     }
     
     public static (string displayName, string messageContents) ParseErrMessage(string message)
     {
-        var match = Regex.IsMatch(message, @"^ERR FROM [\x21-\x7E]{1,20} IS [\x20-\x7E]{1,1400}\r\n$");
+        var match = Regex.IsMatch(message, @"^ERR FROM [\x21-\x7E]{1,20} IS [\x20-\x7E]{1,1400}$");
         if (!match)
             throw new ArgumentException("Invalid message format");
         
         var messageParts = message.Trim().Split(' ');
         
         var displayName = messageParts[2];
-        var messageContents = messageParts[4..];
+        var messageContents = messageParts[4];
 
-        return (displayName, messageContents.ToString());
+        return (displayName, messageContents.TrimEnd());
     }
 }
