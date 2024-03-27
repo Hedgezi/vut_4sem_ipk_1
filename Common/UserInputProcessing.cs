@@ -30,15 +30,31 @@ public class UserInputProcessing(
                             await Console.Error.WriteLineAsync(ErrorMessage.InvalidCommandUsage);
                             continue;
                         }
-        
+
                         var splitArguments = arguments.Split(' ');
                         if (splitArguments.Length != 3)
                         {
                             await Console.Error.WriteLineAsync(ErrorMessage.InvalidCommandUsage);
                             continue;
                         }
+                        
+                        if (!ValidateStringAlphanumWithDash(splitArguments[0]) || splitArguments[0].Length > 20)
+                        {
+                            await Console.Error.WriteLineAsync("Invalid username.");
+                            continue;
+                        }
+                        if (!ValidateStringAlphanumWithDash(splitArguments[1]) || splitArguments[1].Length > 128)
+                        {
+                            await Console.Error.WriteLineAsync("Invalid secret.");
+                            continue;
+                        }
+                        if (!ValidateStringWithAsciiRange(splitArguments[2], 0x21, 0x7E) || splitArguments[2].Length > 20)
+                        {
+                            await Console.Error.WriteLineAsync("Invalid display name.");
+                            continue;
+                        }
         
-                        await connection.Auth(splitArguments[0], splitArguments[1], splitArguments[2]);
+                        await connection.Auth(splitArguments[0], splitArguments[2], splitArguments[1]);
         
                         break;
                     case "/join":
@@ -48,7 +64,7 @@ public class UserInputProcessing(
                             continue;
                         }
                         
-                        if (arguments.ToCharArray().Any(character => character < 33 || character > 126))
+                        if (!ValidateStringAlphanumWithDash(arguments) || arguments.Length > 20)
                         {
                             await Console.Error.WriteLineAsync("Invalid channel name.");
                             continue;
@@ -64,7 +80,7 @@ public class UserInputProcessing(
                             continue;
                         }
 
-                        if (arguments.ToCharArray().Any(character => character < 33 || character > 126))
+                        if (!ValidateStringWithAsciiRange(arguments, 0x21, 0x7E) || arguments.Length > 20)
                         {
                             await Console.Error.WriteLineAsync("Invalid display name.");
                             continue;
@@ -74,13 +90,13 @@ public class UserInputProcessing(
                     
                         break;
                     default:
-                        await Console.Error.WriteLineAsync("Invalid command.");
+                        await Console.Error.WriteLineAsync(ErrorMessage.InvalidCommandUsage);
                         break;
                 }
             }
             else
             {
-                if (input.ToCharArray().Any(character => character < 32 || character > 126))
+                if (!ValidateStringWithAsciiRange(input, 0x20, 0x7E) || input.Length > 1400)
                 {
                     await Console.Error.WriteLineAsync("Invalid message format.");
                     continue;
@@ -89,5 +105,15 @@ public class UserInputProcessing(
                 await connection.SendMessage(input);
             }
         }
+    }
+        
+    private static bool ValidateStringWithAsciiRange(string input, int min, int max)
+    {
+        return input.ToCharArray().All(character => character >= min && character <= max);
+    }
+    
+    private static bool ValidateStringAlphanumWithDash(string input)
+    {
+        return input.ToCharArray().All(character => character == 0x2D || char.IsLetterOrDigit(character));
     }
 }
