@@ -53,7 +53,7 @@ public class TcpConnection : IConnection
                     await Console.Out.WriteLineAsync($"{msgDisplayName}: {msgMessageContents}");
                     break;
                 case MessageType.ERR:
-                    var (errDisplayName, errMessageContents) = TcpMessageParser.ParseMsgMessage(receivedMessage);
+                    var (errDisplayName, errMessageContents) = TcpMessageParser.ParseErrMessage(receivedMessage);
                     
                     await Console.Error.WriteLineAsync($"ERR FROM {errDisplayName}: {errMessageContents}");
                     await EndSession();
