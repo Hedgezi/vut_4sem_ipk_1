@@ -22,7 +22,7 @@ public static class UdpMessageParser
     {
         var messageId = BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]);
         var displayName = ConvertAsciiBytesToString(message, 3);
-        var messageContents = ConvertAsciiBytesToString(message, 3 + displayName.Length);
+        var messageContents = ConvertAsciiBytesToString(message, 3 + displayName.Length + 1);
 
         return (messageId, displayName, messageContents);
     }
@@ -33,6 +33,8 @@ public static class UdpMessageParser
         var length = Array.IndexOf(shortByteArray, (byte)0x00);
         length = length == -1 ? shortByteArray.Length - 1 : length + 1;
 
-        return TextEncoding.GetString(shortByteArray, 0, length);
+        var test = TextEncoding.GetString(shortByteArray, 0, length).Replace('\0', ' ').TrimEnd();
+
+        return TextEncoding.GetString(shortByteArray, 0, length).Replace('\0', ' ').TrimEnd();
     }
 }
