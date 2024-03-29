@@ -16,14 +16,14 @@ public class UdpConnection : IConnection
     private readonly int _maxRetransmissions;
 
     private string _displayName;
-    private ushort _messageCounter = 1;
+    private ushort _messageCounter = 0;
     private ushort _currentlyWaitingForId = 0;
     private FsmState _fsmState = FsmState.Start;
     private readonly List<ushort> _awaitedMessages = [];
     private readonly FixedSizeQueue<ushort> _receivedMessages = new(100);
     private TaskCompletionSource<bool> _taskCompletionSource;
 
-    private readonly UdpClient _client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+    private readonly UdpClient _client = new(new IPEndPoint(IPAddress.Any, 0));
 
     public UdpConnection(IPAddress ip, int port, int confirmationTimeout, int maxRetransmissions)
     {
@@ -75,7 +75,7 @@ public class UdpConnection : IConnection
 
                     return;
                 default:
-                    var incomingMessageId = BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan()[1..3]);
+                    var incomingMessageId = BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]);
 
                     await ServerError(incomingMessageId);
                     return;
@@ -87,7 +87,7 @@ public class UdpConnection : IConnection
     {
         if (_fsmState != FsmState.Open)
         {
-            await Console.Out.WriteLineAsync(ErrorMessage.SendMessageInWrongState);
+            await Console.Error.WriteLineAsync(ErrorMessage.SendMessageInWrongState);
             return;
         }
 
@@ -99,7 +99,7 @@ public class UdpConnection : IConnection
     {
         if (_fsmState is not (FsmState.Start or FsmState.Auth))
         {
-            await Console.Out.WriteLineAsync(ErrorMessage.AuthInWrongState);
+            await Console.Error.WriteLineAsync(ErrorMessage.AuthInWrongState);
             return;
         }
 
@@ -118,7 +118,7 @@ public class UdpConnection : IConnection
     {
         if (_fsmState != FsmState.Open)
         {
-            await Console.Out.WriteLineAsync(ErrorMessage.JoinInWrongState);
+            await Console.Error.WriteLineAsync(ErrorMessage.JoinInWrongState);
             return;
         }
 
@@ -135,7 +135,7 @@ public class UdpConnection : IConnection
     {
         if (_fsmState != FsmState.Open)
         {
-            Console.WriteLine(ErrorMessage.RenameInWrongState);
+            Console.Error.WriteLine(ErrorMessage.RenameInWrongState);
             return;
         }
 
@@ -151,7 +151,6 @@ public class UdpConnection : IConnection
         }
 
         _client.Close();
-        _client.Dispose();
         _fsmState = FsmState.End;
     }
     
@@ -182,7 +181,7 @@ public class UdpConnection : IConnection
     private async Task AuthReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents,
         IPEndPoint endPoint)
     {
-        await SendConfirmMessage(messageId, endPoint);
+        await SendConfirmMessage(messageId, _fsmState == FsmState.Auth ? null : endPoint);
 
         if (!IsItNewMessage(messageId))
             return;
@@ -193,10 +192,10 @@ public class UdpConnection : IConnection
             // TODO: close connection
         }
         _currentlyWaitingForId = 0;
-
-        if (_fsmState is FsmState.Start)
+        
+        if (_fsmState == FsmState.Start)
         {
-            await Task.Delay(_confirmationTimeout);
+            await Task.Delay(100);
             _client.Connect(endPoint);
             _fsmState = FsmState.Auth;
         }
@@ -204,10 +203,11 @@ public class UdpConnection : IConnection
         if (!result)
         {
             await Console.Error.WriteLineAsync($"Failure: {messageContents}");
+            _taskCompletionSource.SetResult(true);
             return;
         }
 
-        await Console.Out.WriteLineAsync($"Success: {messageContents}");
+        await Console.Error.WriteLineAsync($"Success: {messageContents}");
 
         _fsmState = FsmState.Open;
         _taskCompletionSource.SetResult(true);
@@ -230,10 +230,11 @@ public class UdpConnection : IConnection
         if (!result)
         {
             await Console.Error.WriteLineAsync($"Failure: {messageContents}");
+            _taskCompletionSource.SetResult(true);
             return;
         }
         
-        await Console.Out.WriteLineAsync($"Success: {messageContents}");
+        await Console.Error.WriteLineAsync($"Success: {messageContents}");
 
         _taskCompletionSource.SetResult(true);
     }
