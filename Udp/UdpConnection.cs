@@ -75,9 +75,9 @@ public class UdpConnection : IConnection
 
                     return;
                 default:
-                    var incomingMessageId = BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]);
+                    await SendConfirmMessage(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
 
-                    await ServerError(incomingMessageId);
+                    await ServerError();
                     return;
             }
         }
@@ -239,13 +239,14 @@ public class UdpConnection : IConnection
         _taskCompletionSource.SetResult(true);
     }
 
-    private async Task ServerError(ushort messageId)
+    private async Task ServerError()
     {
-        await SendConfirmMessage(messageId);
-
-        var errorMessage =
-            UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, ErrorMessage.ServerError);
-        await SendAndAwaitConfirmResponse(errorMessage, _messageCounter++);
+        if (_fsmState != FsmState.Start)
+        {
+            var errorMessage =
+                UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, ErrorMessage.ServerError);
+            await SendAndAwaitConfirmResponse(errorMessage, _messageCounter++);
+        }
 
         await EndSession();
     }
