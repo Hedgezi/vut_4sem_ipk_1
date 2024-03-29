@@ -2,10 +2,9 @@ namespace vut_ipk1.Common.Structures;
 
 public class FixedSizeQueue<T>
 {
-    private readonly Queue<T> queue = new Queue<T>(); // Internal queue to store elements
-    private readonly int maxSize; // Maximum size of the queue
+    private readonly Queue<T> queue = new Queue<T>();
+    private readonly int maxSize;
 
-    // Constructor takes the maximum size of the queue
     public FixedSizeQueue(int maxSize)
     {
         if (maxSize <= 0)
@@ -16,7 +15,6 @@ public class FixedSizeQueue<T>
         this.maxSize = maxSize;
     }
 
-    // Enqueue method with logic to maintain queue size
     public void Enqueue(T item)
     {
         if (queue.Count >= maxSize)
@@ -43,7 +41,6 @@ public class FixedSizeQueue<T>
         return queue.Dequeue();
     }
 
-    // Property to get the current count of the queue
     public int Count => queue.Count;
 
     public bool Contains(T item)
