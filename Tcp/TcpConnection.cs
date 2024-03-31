@@ -16,9 +16,9 @@ public class TcpConnection : IConnection
     private FsmState _fsmState = FsmState.Start;
     private string _displayName;
     private TaskCompletionSource<bool> _taskCompletionSource;
-    private readonly TaskCompletionSource<bool> _isConnected = new TaskCompletionSource<bool>();
+    private readonly TaskCompletionSource<bool> _isConnected = new();
 
-    private readonly TcpClient _client = new TcpClient(new IPEndPoint(IPAddress.Any, 0));
+    private readonly TcpClient _client = new(new IPEndPoint(IPAddress.Any, 0));
     private readonly TcpMessageReceiver _tcpMessageReceiver = new();
 
     public TcpConnection(IPAddress ip, int port)
@@ -27,6 +27,7 @@ public class TcpConnection : IConnection
         this._port = port;
     }
 
+    /// <inheritdoc />
     public async Task MainLoopAsync()
     {
         await _isConnected.Task;
@@ -35,46 +36,58 @@ public class TcpConnection : IConnection
         {
             var receivedMessage = await _tcpMessageReceiver.ReceiveMessageAsync(_client);
 
-            switch ((MessageType)Enum.Parse(typeof(MessageType), receivedMessage.Split(' ')[0]))
+            try
             {
-                case MessageType.REPLY when _fsmState is FsmState.Auth or FsmState.Start:
-                    var (replyAuthResult, replyAuthMessageContents) = TcpMessageParser.ParseReplyMessage(receivedMessage);
+                switch ((MessageType)Enum.Parse(typeof(MessageType), receivedMessage.Split(' ')[0]))
+                {
+                    case MessageType.REPLY when _fsmState is FsmState.Auth or FsmState.Start:
+                        var (replyAuthResult, replyAuthMessageContents) =
+                            TcpMessageParser.ParseReplyMessage(receivedMessage);
 
-                    Task.Run(() => AuthReplyRetrieval(replyAuthResult, replyAuthMessageContents));
-                    break;
-                case MessageType.REPLY when _fsmState is FsmState.Open:
-                    var (replyJoinResult, replyJoinMessageContents) = TcpMessageParser.ParseReplyMessage(receivedMessage);
+                        Task.Run(() => AuthReplyRetrieval(replyAuthResult, replyAuthMessageContents));
+                        break;
+                    case MessageType.REPLY when _fsmState is FsmState.Open:
+                        var (replyJoinResult, replyJoinMessageContents) =
+                            TcpMessageParser.ParseReplyMessage(receivedMessage);
 
-                    Task.Run(() => JoinReplyRetrieval(replyJoinResult, replyJoinMessageContents));
-                    break;
-                case MessageType.MSG:
-                    var (msgDisplayName, msgMessageContents) = TcpMessageParser.ParseMsgMessage(receivedMessage);
+                        Task.Run(() => JoinReplyRetrieval(replyJoinResult, replyJoinMessageContents));
+                        break;
+                    case MessageType.MSG:
+                        var (msgDisplayName, msgMessageContents) = TcpMessageParser.ParseMsgMessage(receivedMessage);
 
-                    await Console.Out.WriteLineAsync($"{msgDisplayName}: {msgMessageContents}");
-                    break;
-                case MessageType.ERR:
-                    var (errDisplayName, errMessageContents) = TcpMessageParser.ParseErrMessage(receivedMessage);
-                    
-                    await Console.Error.WriteLineAsync($"ERR FROM {errDisplayName}: {errMessageContents}");
-                    await EndSession();
-                    return;
-                case MessageType.BYE:
-                    _client.Close();
-                    
-                    return;
-                default:
-                    await ServerError();
-                    
-                    return;
+                        await Console.Out.WriteLineAsync($"{msgDisplayName}: {msgMessageContents}");
+                        break;
+                    case MessageType.ERR:
+                        var (errDisplayName, errMessageContents) = TcpMessageParser.ParseErrMessage(receivedMessage);
+
+                        await Console.Error.WriteLineAsync($"ERR FROM {errDisplayName}: {errMessageContents}");
+                        await EndSession();
+                        return;
+                    case MessageType.BYE:
+                        _client.Close();
+
+                        return;
+                    default:
+                        await ServerError();
+
+                        return;
+                }
+            }
+            catch (Exception)
+            {
+                await ServerError();
+
+                return;
             }
         }
     }
 
+    /// <inheritdoc />
     public async Task SendMessage(string message)
     {
         if (_fsmState != FsmState.Open)
         {
-            await Console.Out.WriteLineAsync(ErrorMessage.SendMessageInWrongState);
+            await Console.Error.WriteLineAsync(ErrorMessage.SendMessageInWrongState);
             return;
         }
         
@@ -82,11 +95,12 @@ public class TcpConnection : IConnection
         await _client.GetStream().WriteAsync(msgMessage);
     }
 
+    /// <inheritdoc />
     public async Task Auth(string username, string displayName, string secret)
     {
         if (_fsmState is not (FsmState.Start or FsmState.Auth))
         {
-            await Console.Out.WriteLineAsync(ErrorMessage.AuthInWrongState);
+            await Console.Error.WriteLineAsync(ErrorMessage.AuthInWrongState);
             return;
         }
         
@@ -96,6 +110,7 @@ public class TcpConnection : IConnection
         if (!_client.Connected)
         {
             await _client.ConnectAsync(_ip, _port);
+            _fsmState = FsmState.Auth;
             _isConnected.SetResult(true);
         }
 
@@ -104,11 +119,12 @@ public class TcpConnection : IConnection
         await _taskCompletionSource.Task;
     }
 
+    /// <inheritdoc />
     public async Task Join(string channelName)
     {
         if (_fsmState != FsmState.Open)
         {
-            await Console.Out.WriteLineAsync(ErrorMessage.JoinInWrongState);
+            await Console.Error.WriteLineAsync(ErrorMessage.JoinInWrongState);
             return;
         }
         
@@ -119,67 +135,84 @@ public class TcpConnection : IConnection
         await _taskCompletionSource.Task;
     }
 
+    /// <inheritdoc />
     public void Rename(string newDisplayName)
     {
         if (_fsmState != FsmState.Open)
         {
-            Console.WriteLine(ErrorMessage.RenameInWrongState);
+            Console.Error.WriteLine(ErrorMessage.RenameInWrongState);
             return;
         }
 
         _displayName = newDisplayName;
     }
 
+    /// <inheritdoc />
     public async Task EndSession()
     {
-        if (_fsmState is FsmState.Start)
+        if (_fsmState != FsmState.Start)
         {
-            _client.Close();
-            _client.Dispose();
-            return;
+            var byeMessage = TcpMessageGenerator.GenerateByeMessage();
+            await _client.GetStream().WriteAsync(byeMessage);
         }
         
-        var byeMessage = TcpMessageGenerator.GenerateByeMessage();
-        await _client.GetStream().WriteAsync(byeMessage);
-        
+        _client.GetStream().Close();
         _client.Close();
-        _client.Dispose();
         _fsmState = FsmState.End;
     }
     
+    /// <summary>
+    /// This method is used for processing incoming REPLY messages after sending AUTH message.
+    /// It also using TaskCompletionSource releases waiting in the MainLoopAsync method,
+    /// so it starts to receive and process incoming messages.
+    /// </summary>
+    /// <param name="result">Incoming message boolean result</param>
+    /// <param name="messageContents">Incoming message contents</param>
     private async Task AuthReplyRetrieval(bool result, string messageContents)
     {
-        _fsmState = FsmState.Auth;
-        
         if (!result)
         {
             await Console.Error.WriteLineAsync($"Failure: {messageContents}");
+            _taskCompletionSource.SetResult(true);
             return;
         }
 
-        await Console.Out.WriteLineAsync($"Success: {messageContents}");
+        await Console.Error.WriteLineAsync($"Success: {messageContents}");
         
         _fsmState = FsmState.Open;
         _taskCompletionSource.SetResult(true);
     }
     
+    /// <summary>
+    /// This method is used for processing incoming REPLY messages after sending JOIN message.
+    /// </summary>
+    /// <param name="result">Incoming message boolean result</param>
+    /// <param name="messageContents">Incoming message contents</param>
     private async Task JoinReplyRetrieval(bool result, string messageContents)
     {
         if (!result)
         {
             await Console.Error.WriteLineAsync($"Failure: {messageContents}");
+            _taskCompletionSource.SetResult(true);
             return;
         }
 
-        await Console.Out.WriteLineAsync($"Success: {messageContents}");
+        await Console.Error.WriteLineAsync($"Success: {messageContents}");
 
         _taskCompletionSource.SetResult(true);
     }
     
+    /// <summary>
+    /// This method is called when message from server is corrupted or in wrong format.
+    /// It sends ERR message to the server and properly closes the connection.
+    /// </summary>
     private async Task ServerError()
     {
-        var errorMessage = TcpMessageGenerator.GenerateErrMessage(_displayName, ErrorMessage.ServerError);
-        await _client.GetStream().WriteAsync(errorMessage);
+        if (_fsmState != FsmState.Start)
+        {
+            var errorMessage = TcpMessageGenerator.GenerateErrMessage(_displayName, ErrorMessage.ServerError);
+            await _client.GetStream().WriteAsync(errorMessage);
+        }
 
         await EndSession();
     }

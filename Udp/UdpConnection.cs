@@ -19,8 +19,9 @@ public class UdpConnection : IConnection
     private ushort _messageCounter = 0;
     private ushort _currentlyWaitingForId = 0;
     private FsmState _fsmState = FsmState.Start;
+
     private readonly List<ushort> _awaitedMessages = [];
-    private readonly FixedSizeQueue<ushort> _receivedMessages = new(100);
+    private readonly FixedSizeQueue<ushort> _receivedMessages = new(200); // remember received messages for deduplication
     private TaskCompletionSource<bool> _taskCompletionSource;
 
     private readonly UdpClient _client = new(new IPEndPoint(IPAddress.Any, 0));
@@ -33,6 +34,7 @@ public class UdpConnection : IConnection
         this._maxRetransmissions = maxRetransmissions;
     }
 
+    /// <inheritdoc />
     public async Task MainLoopAsync()
     {
         while (true)
@@ -40,49 +42,70 @@ public class UdpConnection : IConnection
             var receivedMessage = await _client.ReceiveAsync();
             var message = receivedMessage.Buffer;
 
-            switch ((MessageType)message[0])
+            try
             {
-                case MessageType.CONFIRM:
-                    _awaitedMessages.Add(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
+                switch ((MessageType)message[0])
+                {
+                    // if CONFIRM received, add message ID to the list of awaited messages,
+                    // so task which waits for this message can gracefully finish
+                    case MessageType.CONFIRM:
+                        _awaitedMessages.Add(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
 
-                    break;
-                case MessageType.REPLY when _fsmState is FsmState.Auth or FsmState.Start:
-                    var (replyAuthMessageId, replyAuthResult, replyAuthRefMessageId, replyAuthMessageContents) =
-                        UdpMessageParser.ParseReplyMessage(message);
+                        break;
+                    // if REPLY received in Auth or Start state, it must be a REPLY to AUTH message
+                    case MessageType.REPLY when _fsmState is FsmState.Auth or FsmState.Start:
+                        var (replyAuthMessageId, replyAuthResult, replyAuthRefMessageId, replyAuthMessageContents) =
+                            UdpMessageParser.ParseReplyMessage(message);
 
-                    Task.Run(() => AuthReplyRetrieval(replyAuthMessageId, replyAuthResult,
-                        replyAuthRefMessageId, replyAuthMessageContents, receivedMessage.RemoteEndPoint));
-                    break;
-                case MessageType.REPLY when _fsmState is FsmState.Open:
-                    var (replyJoinMessageId, replyJoinResult, replyJoinRefMessageId, replyJoinMessageContents) =
-                        UdpMessageParser.ParseReplyMessage(message);
+                        Task.Run(() => AuthReplyRetrieval(replyAuthMessageId, replyAuthResult,
+                            replyAuthRefMessageId, replyAuthMessageContents, receivedMessage.RemoteEndPoint));
+                        break;
+                    // if REPLY received in Open state, it must be a REPLY to JOIN message
+                    case MessageType.REPLY when _fsmState is FsmState.Open:
+                        var (replyJoinMessageId, replyJoinResult, replyJoinRefMessageId, replyJoinMessageContents) =
+                            UdpMessageParser.ParseReplyMessage(message);
 
-                    Task.Run(() => JoinReplyRetrieval(replyJoinMessageId, replyJoinResult,
-                        replyJoinRefMessageId, replyJoinMessageContents));
-                    break;
-                case MessageType.MSG:
-                    var (msgMessageId, msgDisplayName, msgMessageContents) = UdpMessageParser.ParseMsgMessage(message);
+                        Task.Run(() => JoinReplyRetrieval(replyJoinMessageId, replyJoinResult,
+                            replyJoinRefMessageId, replyJoinMessageContents));
+                        break;
+                    case MessageType.MSG:
+                        var (msgMessageId, msgDisplayName, msgMessageContents) =
+                            UdpMessageParser.ParseMsgMessage(message);
 
-                    Task.Run(() => Msg(msgMessageId, msgDisplayName, msgMessageContents));
-                    break;
-                case MessageType.ERR:
-                    var (errMessageId, errDisplayName, errMessageContents) = UdpMessageParser.ParseMsgMessage(message);
+                        Task.Run(() => Msg(msgMessageId, msgDisplayName, msgMessageContents));
+                        break;
+                    case MessageType.ERR:
+                        var (errMessageId, errDisplayName, errMessageContents) =
+                            UdpMessageParser.ParseMsgMessage(message); // ERR and MSG have the same structure
 
-                    await Err(errMessageId, errDisplayName, errMessageContents);
-                    return;
-                case MessageType.BYE:
-                    _client.Close();
+                        await Err(errMessageId, errDisplayName, errMessageContents);
+                        return;
+                    case MessageType.BYE:
+                        _client.Close();
 
-                    return;
-                default:
+                        return;
+                    // if unknown message type received, send CONFIRM with the message ID and close the connection
+                    default:
+                        await SendConfirmMessage(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
+
+                        await ServerError();
+                        return;
+                }
+            }
+            catch (Exception) // if exception occurred, send CONFIRM with the message ID and close the connection
+            {
+                if (_fsmState != FsmState.Start && message.Length > 2)
+                {
                     await SendConfirmMessage(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
-
-                    await ServerError();
-                    return;
+                }
+                
+                await ServerError();
+                return;
             }
         }
     }
     
+    /// <inheritdoc />
     public async Task SendMessage(string message)
     {
         if (_fsmState != FsmState.Open)
@@ -95,6 +118,7 @@ public class UdpConnection : IConnection
         await SendAndAwaitConfirmResponse(messageToSend, _messageCounter++);
     }
 
+    /// <inheritdoc />
     public async Task Auth(string username, string displayName, string secret)
     {
         if (_fsmState is not (FsmState.Start or FsmState.Auth))
@@ -109,11 +133,12 @@ public class UdpConnection : IConnection
         var authMessage = UdpMessageGenerator.GenerateAuthMessage(_messageCounter, username, displayName, secret);
         _currentlyWaitingForId = _messageCounter;
         await SendAndAwaitConfirmResponse(authMessage, _messageCounter++,
-            _fsmState == FsmState.Auth ? null : new IPEndPoint(_ip, _port));
+            _fsmState == FsmState.Auth ? null : new IPEndPoint(_ip, _port)); // send on default endpoint if not established connection on specific port
 
         await _taskCompletionSource.Task;
     }
 
+    /// <inheritdoc />
     public async Task Join(string channelName)
     {
         if (_fsmState != FsmState.Open)
@@ -131,6 +156,7 @@ public class UdpConnection : IConnection
         await _taskCompletionSource.Task;
     }
 
+    /// <inheritdoc />
     public void Rename(string newDisplayName)
     {
         if (_fsmState != FsmState.Open)
@@ -142,6 +168,7 @@ public class UdpConnection : IConnection
         _displayName = newDisplayName;
     }
 
+    /// <inheritdoc />
     public async Task EndSession()
     {
         if (_fsmState != FsmState.Start)
@@ -154,6 +181,12 @@ public class UdpConnection : IConnection
         _fsmState = FsmState.End;
     }
     
+    /// <summary>
+    /// This method is used for processing incoming messages.
+    /// </summary>
+    /// <param name="messageId">Incoming message ID</param>
+    /// <param name="displayName">Incoming message's display name</param>
+    /// <param name="messageContents">Incoming message contents</param>
     private async Task Msg(ushort messageId, string displayName, string messageContents)
     {
         await SendConfirmMessage(messageId);
@@ -165,9 +198,18 @@ public class UdpConnection : IConnection
         await Console.Out.WriteLineAsync($"{displayName}: {messageContents}");
     }
 
+    /// <summary>
+    /// This method is used for processing incoming error messages and ending the session.
+    /// </summary>
+    /// <param name="messageId">Incoming message ID</param>
+    /// <param name="displayName">Incoming message's display name</param>
+    /// <param name="messageContents">Incoming message contents</param>
     private async Task Err(ushort messageId, string displayName, string messageContents)
     {
-        await SendConfirmMessage(messageId);
+        if (_fsmState != FsmState.Start)
+        {
+            await SendConfirmMessage(messageId);
+        }
 
         if (_receivedMessages.Contains(messageId))
             return;
@@ -178,6 +220,15 @@ public class UdpConnection : IConnection
         await EndSession();
     }
 
+    /// <summary>
+    /// This method is used for processing incoming REPLY messages after sending AUTH message.
+    /// It also handles the connection to the given endpoint.
+    /// </summary>
+    /// <param name="messageId">Incoming message ID</param>
+    /// <param name="result">Incoming message boolean result</param>
+    /// <param name="refMessageId">Incoming message referenced ID</param>
+    /// <param name="messageContents">Incoming message contents</param>
+    /// <param name="endPoint">Incoming message endpoint</param>
     private async Task AuthReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents,
         IPEndPoint endPoint)
     {
@@ -189,10 +240,14 @@ public class UdpConnection : IConnection
         
         if (_currentlyWaitingForId != refMessageId)
         {
-            // TODO: close connection
+            await Console.Error.WriteLineAsync(ErrorMessage.ServerError);
+            
+            await ServerError();
+            Environment.Exit(1);
         }
         _currentlyWaitingForId = 0;
         
+        // if the connection is not established, connect to the server on the specific port
         if (_fsmState == FsmState.Start)
         {
             await Task.Delay(100);
@@ -213,6 +268,13 @@ public class UdpConnection : IConnection
         _taskCompletionSource.SetResult(true);
     }
 
+    /// <summary>
+    /// This method is used for processing incoming REPLY messages after sending JOIN message.
+    /// </summary>
+    /// <param name="messageId">Incoming message ID</param>
+    /// <param name="result">Incoming message boolean result</param>
+    /// <param name="refMessageId">Incoming message referenced ID</param>
+    /// <param name="messageContents">Incoming message contents</param>
     private async Task JoinReplyRetrieval(ushort messageId, bool result, ushort refMessageId, string messageContents)
     {
         await SendConfirmMessage(messageId);
@@ -223,7 +285,10 @@ public class UdpConnection : IConnection
         
         if (_currentlyWaitingForId != refMessageId)
         {
-            // TODO: close connection
+            await Console.Error.WriteLineAsync(ErrorMessage.ServerError);
+            
+            await ServerError();
+            Environment.Exit(1);
         }
         _currentlyWaitingForId = 0;
 
@@ -263,8 +328,9 @@ public class UdpConnection : IConnection
                 return;
         }
 
+        // if the message was not confirmed, send error message and close the connection
         await Console.Error.WriteLineAsync(ErrorMessage.NoResponse);
-        // TODO: close connection
+        await ServerError();
         
         Environment.Exit(1);
     }
