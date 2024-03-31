@@ -7,14 +7,20 @@ public class UserInputProcessing(
     IConnection connection
 )
 {
+    private IConnection _connection = connection;
+    
     public async Task ProcessUserInputAsync()
     {
         while (true)
         {
             var input = await Console.In.ReadLineAsync();
-        
+
             if (input == null)
-                continue;
+            {
+                await _connection.EndSession();
+                
+                return;
+            }
         
             if (input.StartsWith('/'))
             {
@@ -55,7 +61,7 @@ public class UserInputProcessing(
                             continue;
                         }
         
-                        await connection.Auth(splitArguments[0], splitArguments[2], splitArguments[1]);
+                        await _connection.Auth(splitArguments[0], splitArguments[2], splitArguments[1]);
         
                         break;
                     case "/join":
@@ -71,7 +77,7 @@ public class UserInputProcessing(
                             continue;
                         }
                         
-                        await connection.Join(arguments);
+                        await _connection.Join(arguments);
                         
                         break;
                     case "/rename":
@@ -87,7 +93,7 @@ public class UserInputProcessing(
                             continue;
                         }
                         
-                        connection.Rename(arguments);
+                        _connection.Rename(arguments);
                     
                         break;
                     case "/help":
@@ -117,7 +123,7 @@ public class UserInputProcessing(
                     continue;
                 }
                 
-                await connection.SendMessage(input);
+                await _connection.SendMessage(input);
             }
         }
     }
