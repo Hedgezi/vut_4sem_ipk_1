@@ -13,6 +13,13 @@ public class TcpMessageReceiver
     private readonly FixedSizeQueue<string> _queuedMessages = new(50);
     private readonly StringBuilder _messageBuilder = new();
 
+    /// <summary>
+    /// Receive and return message from the client.
+    /// It receive bytes from TCP stream, then split them into messages and return them one by one,
+    /// while keeping the rest in queue.
+    /// </summary>
+    /// <param name="client">Client to receive message</param>
+    /// <returns>Message string</returns>
     public async Task<string> ReceiveMessageAsync(TcpClient client)
     {
         if (_queuedMessages.Count > 0)
@@ -20,6 +27,7 @@ public class TcpMessageReceiver
         
         var receivedMessageBytes = await client.GetStream().ReadAsync(_buffer);
 
+        // If the last message is not fully built, we need to keep it in the builder
         var lastMessageToBuild = receivedMessageBytes == BufferSize && !_buffer[^1].Equals(0x0A) && !_buffer[^2].Equals(0x0D);
 
         var receivedMessages = ConversionEncoding.GetString(_buffer, 0, receivedMessageBytes).Split("\r\n");
@@ -31,12 +39,14 @@ public class TcpMessageReceiver
                 break;
             }
             
+            // If the last message is ended with \r\n, we need to keep it in the buffer
             if (i == receivedMessages.Length - 1 && !lastMessageToBuild)
             {
                 _queuedMessages.Enqueue(receivedMessages[i]);
                 break;
             } 
             
+            // If the last message is not fully built, we need to keep it in the builder and wait for the next message
             if (i == receivedMessages.Length - 1 && lastMessageToBuild)
             {
                 _messageBuilder.Append(receivedMessages[i]);

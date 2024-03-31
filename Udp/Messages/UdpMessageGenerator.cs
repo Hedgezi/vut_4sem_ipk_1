@@ -94,6 +94,11 @@ public static class UdpMessageGenerator
         return message;
     }
 
+    /// <summary>
+    /// This method converts the string to ASCII bytes and appends null byte at the end.
+    /// </summary>
+    /// <param name="convertedString">String to convert</param>
+    /// <returns>Converted byte array</returns>
     private static byte[] ConvertStringToAsciiBytes(string convertedString)
     {
         var buffer = new byte[TextEncoding.GetByteCount(convertedString)+1];
