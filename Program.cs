@@ -10,17 +10,18 @@ namespace vut_ipk1;
 
 class Program
 {
-    private static IConnection _connection;
+    private static IConnection? _connection;
 
     private static async Task Main(string[] args)
     {
         Console.CancelKeyPress += async (sender, e) =>
         {
             e.Cancel = true;
+            
+            if (_connection != null)
+                await _connection.EndSession();
 
-            await _connection.EndSession();
-
-            Console.WriteLine("Exiting...");
+            Console.Error.WriteLine("Exiting...");
             Environment.Exit(0);
         };
 
@@ -29,16 +30,7 @@ class Program
             .WithParsed(o => options = o)
             .WithNotParsed(errors => { throw new System.Exception("Invalid command line arguments."); });
 
-        IPAddress hostname = Dns.GetHostEntry(options.ServerHostname).AddressList[0];
-
-        foreach (var address in Dns.GetHostEntry(options.ServerHostname).AddressList)
-        {
-            if (address.AddressFamily == AddressFamily.InterNetwork)
-            {
-                hostname = address;
-                break;
-            }
-        }
+        var hostname = GetProperIpAddress(options.ServerHostname);
 
         _connection = options.ProtocolType switch
         {
@@ -59,5 +51,21 @@ class Program
         var userInputProcessingTask = userInputProcessing.ProcessUserInputAsync();
 
         await Task.WhenAny(connectionMainLoopTask, userInputProcessingTask);
+    }
+    
+    private static IPAddress GetProperIpAddress(string hostname)
+    {
+        var ipAddress = Dns.GetHostEntry(hostname).AddressList[0];
+
+        foreach (var address in Dns.GetHostEntry(hostname).AddressList)
+        {
+            if (address.AddressFamily != AddressFamily.InterNetwork)
+                continue;
+            
+            ipAddress = address;
+            break;
+        }
+
+        return ipAddress;
     }
 }
