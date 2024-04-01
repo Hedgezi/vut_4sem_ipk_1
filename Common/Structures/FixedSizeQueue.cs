@@ -22,6 +22,10 @@ public class FixedSizeQueue<T>
         this.maxSize = maxSize;
     }
 
+    /// <summary>
+    /// This method adds an item to the queue. If the queue is full, the oldest element is removed.
+    /// </summary>
+    /// <param name="item">Item to add</param>
     public void Enqueue(T item)
     {
         if (queue.Count >= maxSize)
@@ -37,7 +41,11 @@ public class FixedSizeQueue<T>
         queue.Enqueue(item); // Add the new item to the queue
     }
 
-    // Dequeue method to remove and return the oldest element from the queue
+    /// <summary>
+    /// Dequeue method to remove and return the oldest element from the queue
+    /// </summary>
+    /// <returns>Element</returns>
+    /// <exception cref="InvalidOperationException">If queue is empty</exception>
     public T Dequeue()
     {
         if (queue.Count == 0)
