@@ -52,7 +52,7 @@ This project contains unit tests for the project.
 * `Udp/UdpMessageGeneratorUnitTests.cs` contains unit tests for the `UdpMessageGenerator` class.
 
 
-## [UDP connection](#udp-connection)
+## UDP connection
 
 ### AUTH message (JOIN works the same way)
 ![UDP Auth message Sequence Diagram](Doc/imgs/ipk_udp_auth.svg "UDP Auth message Sequence Diagram")
@@ -61,7 +61,7 @@ This project contains unit tests for the project.
 ![UDP Send message Sequence Diagram](Doc/imgs/ipk_udp_sendmsg.svg "UDP Send message Sequence Diagram")
 
 
-## [TCP connection](#tcp-connection)
+## TCP connection
 
 ### AUTH message (JOIN works the same way)
 ![TCP Auth message Sequence Diagram](Doc/imgs/ipk_tcp_auth.svg "TCP Auth message Sequence Diagram")
