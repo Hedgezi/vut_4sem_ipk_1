@@ -28,7 +28,7 @@ public class TcpConnection : IConnection
     }
 
     /// <inheritdoc />
-    public async Task MainLoopAsync()
+    public async Task<int> MainLoopAsync()
     {
         await _isConnected.Task; // Wait for connection to be established
             
@@ -62,22 +62,22 @@ public class TcpConnection : IConnection
 
                         await Console.Error.WriteLineAsync($"ERR FROM {errDisplayName}: {errMessageContents}");
                         await EndSession();
-                        return;
+                        return 1;
                     case MessageType.BYE:
                         _client.Close();
 
-                        return;
+                        return 0;
                     default:
                         await ServerError();
 
-                        return;
+                        return 1;
                 }
             }
             catch (Exception)
             {
                 await ServerError();
 
-                return;
+                return 1;
             }
         }
     }

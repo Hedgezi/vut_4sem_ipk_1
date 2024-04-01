@@ -9,7 +9,7 @@ public class UserInputProcessing(
 {
     private IConnection _connection = connection;
     
-    public async Task ProcessUserInputAsync()
+    public async Task<int> ProcessUserInputAsync()
     {
         while (true)
         {
@@ -19,7 +19,7 @@ public class UserInputProcessing(
             {
                 await _connection.EndSession();
                 
-                return;
+                return 0;
             }
         
             if (input.StartsWith('/'))

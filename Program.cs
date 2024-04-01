@@ -12,7 +12,7 @@ class Program
 {
     private static IConnection? _connection;
 
-    private static async Task Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         Console.CancelKeyPress += async (sender, e) =>
         {
@@ -27,8 +27,7 @@ class Program
 
         var options = new CommandLineOptions();
         Parser.Default.ParseArguments<CommandLineOptions>(args)
-            .WithParsed(o => options = o)
-            .WithNotParsed(errors => { throw new System.Exception("Invalid command line arguments."); });
+            .WithParsed(o => options = o);
 
         var hostname = GetProperIpAddress(options.ServerHostname);
 
@@ -50,7 +49,8 @@ class Program
         var connectionMainLoopTask = _connection.MainLoopAsync();
         var userInputProcessingTask = userInputProcessing.ProcessUserInputAsync();
 
-        await Task.WhenAny(connectionMainLoopTask, userInputProcessingTask);
+        var result = await await Task.WhenAny(connectionMainLoopTask, userInputProcessingTask);
+        return result;
     }
     
     private static IPAddress GetProperIpAddress(string hostname)

@@ -35,7 +35,7 @@ public class UdpConnection : IConnection
     }
 
     /// <inheritdoc />
-    public async Task MainLoopAsync()
+    public async Task<int> MainLoopAsync()
     {
         while (true)
         {
@@ -79,17 +79,17 @@ public class UdpConnection : IConnection
                             UdpMessageParser.ParseMsgMessage(message); // ERR and MSG have the same structure
 
                         await Err(errMessageId, errDisplayName, errMessageContents);
-                        return;
+                        return 1;
                     case MessageType.BYE:
                         _client.Close();
 
-                        return;
+                        return 0;
                     // if unknown message type received, send CONFIRM with the message ID and close the connection
                     default:
                         await SendConfirmMessage(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
 
                         await ServerError();
-                        return;
+                        return 1;
                 }
             }
             catch (Exception) // if exception occurred, send CONFIRM with the message ID and close the connection
@@ -100,7 +100,7 @@ public class UdpConnection : IConnection
                 }
                 
                 await ServerError();
-                return;
+                return 1;
             }
         }
     }

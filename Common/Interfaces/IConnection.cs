@@ -7,7 +7,7 @@ public interface IConnection
     /// If incorrect message was received, the connection will be properly closed.
     /// </summary>
     /// <returns>Task</returns>
-    public Task MainLoopAsync();
+    public Task<int> MainLoopAsync();
     
     /// <summary>
     /// Send MSG message to the server with text specified in parameter.
