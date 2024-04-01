@@ -312,6 +312,8 @@ public class UdpConnection : IConnection
                 UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, ErrorMessage.ServerError);
             await SendAndAwaitConfirmResponse(errorMessage, _messageCounter++);
         }
+        
+        await Console.Error.WriteLineAsync(ErrorMessage.ServerError);
 
         await EndSession();
     }

@@ -15,8 +15,8 @@ public class TcpConnection : IConnection
     
     private FsmState _fsmState = FsmState.Start;
     private string _displayName;
-    private TaskCompletionSource<bool> _taskCompletionSource;
-    private readonly TaskCompletionSource<bool> _isConnected = new();
+    private TaskCompletionSource<bool> _taskCompletionSource; // Used for waiting for server response
+    private readonly TaskCompletionSource<bool> _isConnected = new(); // Used for waiting for connection to be established, to run main loop
 
     private readonly TcpClient _client = new(new IPEndPoint(IPAddress.Any, 0));
     private readonly TcpMessageReceiver _tcpMessageReceiver = new();
@@ -30,7 +30,7 @@ public class TcpConnection : IConnection
     /// <inheritdoc />
     public async Task MainLoopAsync()
     {
-        await _isConnected.Task;
+        await _isConnected.Task; // Wait for connection to be established
             
         while (true)
         {
@@ -213,6 +213,8 @@ public class TcpConnection : IConnection
             var errorMessage = TcpMessageGenerator.GenerateErrMessage(_displayName, ErrorMessage.ServerError);
             await _client.GetStream().WriteAsync(errorMessage);
         }
+
+        await Console.Error.WriteLineAsync(ErrorMessage.ServerError);
 
         await EndSession();
     }
