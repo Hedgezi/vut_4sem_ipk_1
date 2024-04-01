@@ -3,9 +3,15 @@ Author: Mykola Vorontsov (xvoron03)
 License: AGPL-3.0  
 
 ## Theory summary
+This is an implementation of a client for the `IPK24-CHAT` protocol as specified by its [specification](https://git.fit.vutbr.cz/NESFIT/IPK-Projects-2024/src/branch/master/Project%201).  
+I've used C# programming language and .NET 8 to implement this project. 
+For parallel processing, I've used the asynchronous programming model, using C#'s `async` and `await`.
+The core idea for client is using two parallel-working Tasks: one for receiving messages from the server and the other for processing user input and sending messages to the server.
+
+
 
 ## Project structure
-The project is divided into four general namespaces (folders).  
+The project is divided into four general namespaces (folders) and one separate project with unit tests.
 
 ### Namespace `vut_ipk1`
 * `Program.cs` is the entry point of the application. It consists of:
@@ -41,11 +47,18 @@ This namespace contains classes that are used for the TCP variant of the IPK24-C
 * `Facades/TcpMessageReceiver.cs` is a class that receives messages from the server and processes them.
 It receives messages over the stream and divides it into separate messages based on the `\r\n` delimiter and serves it one by one to the client.
 
+### Project `UnitTests`
+This project contains unit tests for the project.
+* `Udp/UdpMessageGeneratorUnitTests.cs` contains unit tests for the `UdpMessageGenerator` class.
+
 
 ## [UDP connection](#udp-connection)
 
 ### AUTH message (JOIN works the same way)
 ![UDP Auth message Sequence Diagram](Doc/imgs/ipk_udp_auth.svg "UDP Auth message Sequence Diagram")
+
+### Send message
+![UDP Send message Sequence Diagram](Doc/imgs/ipk_udp_sendmsg.svg "UDP Send message Sequence Diagram")
 
 
 ## [TCP connection](#tcp-connection)
@@ -53,6 +66,8 @@ It receives messages over the stream and divides it into separate messages based
 ### AUTH message (JOIN works the same way)
 ![TCP Auth message Sequence Diagram](Doc/imgs/ipk_tcp_auth.svg "TCP Auth message Sequence Diagram")
 
+### Send message
+![TCP Send message Sequence Diagram](Doc/imgs/ipk_tcp_sendmsg.svg "TCP Send message Sequence Diagram")
 
 
 ## Extra functionality
@@ -60,13 +75,14 @@ There is no extra functionality implemented in this project.
 
 
 ## Testing
-Testing was 
 
 ### UDP
-All testing of UDP part was done using Wireshark, Public Reference Server and Unit Tests.
+All testing of UDP part was done using Wireshark, Public Reference Server and Unit Tests.  
+The main reason for using Wireshark was to verify that the messages are sent correctly and in the right format.  
+The unit tests ensured that the messages are parsed correctly. Especially parsing of strings from messages was tested.
 
 ### TCP
-All testing of TCP part was done using Wireshark and Public Reference Server.
+All testing of TCP part was done using Public Reference Server. I had no problems implementing the TCP part, so I didn't need to use Wireshark to verify the messages.
 
 
 ## Bibliography
