@@ -15,7 +15,7 @@ public class UserInputProcessing(
         {
             var input = await Console.In.ReadLineAsync();
 
-            if (input == null)
+            if (input == null) // if EOF, end connection
             {
                 await _connection.EndSession();
                 
@@ -135,7 +135,6 @@ public class UserInputProcessing(
     
     private static bool ValidateStringAlphanumWithDash(string input)
     {
-        // TODO: delete dot
-        return input.ToCharArray().All(character => character == 0x2D || character == 0x2E || character >= 0x30 && character <= 0x39 || character >= 0x41 && character <= 0x5A || character >= 0x61 && character <= 0x7A);
+        return input.ToCharArray().All(character => character == 0x2D || (character >= 0x30 && character <= 0x39) || (character >= 0x41 && character <= 0x5A) || (character >= 0x61 && character <= 0x7A));
     }
 }
