@@ -16,13 +16,13 @@ public class UdpConnection : IConnection
     private readonly int _maxRetransmissions;
 
     private string _displayName;
-    private ushort _messageCounter = 0;
-    private ushort _currentlyWaitingForId = 0;
+    private ushort _messageCounter = 0; // client-sent message ID counter
+    private ushort _currentlyWaitingForId = 0; // ID of the message we are currently waiting for (used for REPLY messages)
     private FsmState _fsmState = FsmState.Start;
 
-    private readonly List<ushort> _awaitedMessages = [];
+    private readonly FixedSizeQueue<ushort> _awaitedMessages = new(200); // all CONFIRM messages go here
     private readonly FixedSizeQueue<ushort> _receivedMessages = new(200); // remember received messages for deduplication
-    private TaskCompletionSource<bool> _taskCompletionSource;
+    private TaskCompletionSource<bool> _taskCompletionSource; // used for waiting for the server response
 
     private readonly UdpClient _client = new(new IPEndPoint(IPAddress.Any, 0));
 
@@ -49,7 +49,7 @@ public class UdpConnection : IConnection
                     // if CONFIRM received, add message ID to the list of awaited messages,
                     // so task which waits for this message can gracefully finish
                     case MessageType.CONFIRM:
-                        _awaitedMessages.Add(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
+                        _awaitedMessages.Enqueue(BinaryPrimitives.ReadUInt16BigEndian(message.AsSpan()[1..3]));
 
                         break;
                     // if REPLY received in Auth or Start state, it must be a REPLY to AUTH message
@@ -324,7 +324,7 @@ public class UdpConnection : IConnection
 
             await Task.Delay(_confirmationTimeout);
 
-            if (_awaitedMessages.Remove(messageId))
+            if (_awaitedMessages.Contains(messageId))
                 return;
         }
 
