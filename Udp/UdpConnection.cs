@@ -19,6 +19,7 @@ public class UdpConnection : IConnection
     private ushort _messageCounter = 0; // client-sent message ID counter
     private ushort _currentlyWaitingForId = 0; // ID of the message we are currently waiting for (used for REPLY messages)
     private FsmState _fsmState = FsmState.Start;
+    private bool _secondTimeConnectionError;
 
     private readonly FixedSizeQueue<ushort> _awaitedMessages = new(200); // all CONFIRM messages go here
     private readonly FixedSizeQueue<ushort> _receivedMessages = new(200); // remember received messages for deduplication
@@ -77,6 +78,9 @@ public class UdpConnection : IConnection
                     case MessageType.ERR:
                         var (errMessageId, errDisplayName, errMessageContents) =
                             UdpMessageParser.ParseMsgMessage(message); // ERR and MSG have the same structure
+                        
+                        if (_fsmState == FsmState.Start)
+                            _client.Connect(receivedMessage.RemoteEndPoint);
 
                         await Err(errMessageId, errDisplayName, errMessageContents);
                         return 1;
@@ -306,15 +310,16 @@ public class UdpConnection : IConnection
 
     private async Task ServerError()
     {
+        await Console.Error.WriteLineAsync(ErrorMessage.ServerError);
+        
         if (_fsmState != FsmState.Start)
         {
+            _secondTimeConnectionError = true;
             var errorMessage =
-                UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, ErrorMessage.ServerError);
+                UdpMessageGenerator.GenerateErrMessage(_messageCounter, _displayName, "error");
             await SendAndAwaitConfirmResponse(errorMessage, _messageCounter++);
         }
         
-        await Console.Error.WriteLineAsync(ErrorMessage.ServerError);
-
         await EndSession();
     }
 
@@ -331,7 +336,8 @@ public class UdpConnection : IConnection
         }
 
         // if the message was not confirmed, send error message and close the connection
-        await ServerError();
+        if (!_secondTimeConnectionError)
+            await ServerError();
         
         Environment.Exit(1);
     }
