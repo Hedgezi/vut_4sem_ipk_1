@@ -11,7 +11,7 @@ public static class TcpMessageParser
         if (!match)
             throw new ArgumentException("Invalid message format");
         
-        var messageParts = message.Trim().Split(' ');
+        var messageParts = message.Trim().Split(' ', 4);
         
         var result = messageParts[1] == "OK";
 
@@ -38,7 +38,7 @@ public static class TcpMessageParser
         if (!match)
             throw new ArgumentException("Invalid message format");
         
-        var messageParts = message.Trim().Split(' ');
+        var messageParts = message.Trim().Split(' ', 5);
         
         var displayName = messageParts[2];
         var messageContents = messageParts[4];
