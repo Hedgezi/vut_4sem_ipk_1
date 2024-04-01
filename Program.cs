@@ -21,7 +21,7 @@ class Program
             if (_connection != null)
                 await _connection.EndSession();
 
-            Console.Error.WriteLine("Exiting...");
+            await Console.Error.WriteLineAsync("Exiting...");
             Environment.Exit(0);
         };
 
