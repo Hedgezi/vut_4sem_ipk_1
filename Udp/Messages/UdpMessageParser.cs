@@ -32,18 +32,9 @@ public static class UdpMessageParser
 
     private static string ConvertAsciiBytesToString(byte[] bytes, int startIndex)
     {
-        byte[] shortByteArray;
-        if (bytes[startIndex] == 0x00)
-        {
-            startIndex++;
-            shortByteArray = bytes[startIndex..];
-        }
-        else
-        {
-            shortByteArray = bytes[startIndex..];
-        }
+        var shortByteArray = bytes[startIndex] == 0x00 ? bytes[++startIndex..] : bytes[startIndex..];
         var length = Array.IndexOf(shortByteArray, (byte)0x00);
-        length = length == -1 ? shortByteArray.Length - 1 : length + 1; // TODO: Check if this is correct
+        length = length == -1 ? shortByteArray.Length - 1 : length + 1;
 
         return TextEncoding.GetString(shortByteArray, 0, length).Trim('\0');
     }
