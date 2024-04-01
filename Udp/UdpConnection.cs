@@ -331,7 +331,6 @@ public class UdpConnection : IConnection
         }
 
         // if the message was not confirmed, send error message and close the connection
-        await Console.Error.WriteLineAsync(ErrorMessage.NoResponse);
         await ServerError();
         
         Environment.Exit(1);
